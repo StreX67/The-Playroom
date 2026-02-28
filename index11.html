@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hazard Case Opener</title>
+
+<meta name="description" content="Hazard Case Opener – gra kasyno online">
+<meta name="theme-color" content="#14142b">
+
+<style>
+body{
+    background:linear-gradient(135deg,#14142b,#1f1f3a);
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+h1{margin-top:20px;}
+.balance{font-size:22px;margin-bottom:20px;}
+.cases{display:flex;justify-content:center;gap:15px;flex-wrap:wrap;margin-bottom:30px;}
+.case{background:#2e2e4d;padding:15px;border-radius:10px;cursor:pointer;transition:0.2s;width:170px;}
+.case:hover{background:#3e3e6d;transform:scale(1.05);}
+.case.disabled{opacity:0.5;pointer-events:none;}
+.result-box{margin:30px auto;width:400px;height:200px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:bold;transition:0.3s;}
+.drop-info{margin-top:30px;text-align:left;display:inline-block;background:#1e1e35;padding:20px;border-radius:10px;}
+.common{background:gray;}
+.uncommon{background:green;}
+.rare{background:blue;}
+.epic{background:purple;}
+.legendary{background:gold;color:black;}
+.mythic{background:red;box-shadow:0 0 25px red;}
+.secret{background:linear-gradient(45deg,cyan,magenta,yellow);color:black;}
+</style>
+</head>
+
+<body>
+
+<h1>🎰 Hazard Case Opener</h1>
+<a href="menu.html" style="color:white">⬅ Powrót do menu</a>
+<div class="balance">💰 Saldo: <span id="balance"></span> zł</div>
+
+<div class="cases" id="cases"></div>
+
+<div id="resultBox" class="result-box">
+    Otwórz skrzynkę
+</div>
+
+<div class="drop-info" id="dropInfo"></div>
+
+<script>
+let isOpening = false;
+
+if(localStorage.getItem("saldo") === null){
+    localStorage.setItem("saldo",1000);
+}
+
+function getSaldo(){ return parseInt(localStorage.getItem("saldo")); }
+function setSaldo(v){
+    if(v<0) v=0;
+    localStorage.setItem("saldo",v);
+    setSaldoFirebase(v);
+}
+function updateBalance(){ document.getElementById("balance").innerText=getSaldo(); }
+updateBalance();
+
+const cases=[
+{ name:"🟢 Basic (50 zł)", price:50 },
+{ name:"🔵 Silver (100 zł)", price:100 },
+{ name:"🟣 Gold (200 zł)", price:200 },
+{ name:"🔴 Diamond (400 zł)", price:400 },
+{ name:"💎 Super Lucky Chest (10000 zł)", price:10000 }
+];
+
+function generateItems(base, superLucky=false){
+    const rarities = superLucky ? [
+        {name:"Common", value:base*0.35, chance:30, rarity:"common"},
+        {name:"Uncommon", value:base*0.6, chance:25, rarity:"uncommon"},
+        {name:"Rare", value:base*1.0, chance:15, rarity:"rare"},
+        {name:"Epic", value:base*1.5, chance:12, rarity:"epic"},
+        {name:"Legendary", value:base*4.0, chance:10, rarity:"legendary"},
+        {name:"Mythic", value:base*8.0, chance:6, rarity:"mythic"},
+        {name:"SECRET", value:base*40, chance:2, rarity:"secret"}
+    ] : [
+        {name:"Common", value:base*0.38, chance:40, rarity:"common"},
+        {name:"Uncommon", value:base*0.6, chance:25, rarity:"uncommon"},
+        {name:"Rare", value:base*0.9, chance:15, rarity:"rare"},
+        {name:"Epic", value:base*1.15, chance:9, rarity:"epic"},
+        {name:"Legendary", value:base*3.0, chance:6, rarity:"legendary"},
+        {name:"Mythic", value:base*6, chance:3, rarity:"mythic"},
+        {name:"SECRET", value:base*25, chance:2, rarity:"secret"}
+    ];
+
+    let items=[];
+    rarities.forEach(r=>{
+        for(let i=1;i<=3;i++){
+            items.push({
+                name:r.name+" "+i,
+                value:r.value*(0.95+Math.random()*0.1),
+                chance:r.chance/3,
+                rarity:r.rarity
+            });
+        }
+    });
+    return items;
+}
+
+function weightedRandom(items){
+    let total=items.reduce((a,b)=>a+b.chance,0);
+    let rand=Math.random()*total;
+    let sum=0;
+    for(let item of items){
+        sum+=item.chance;
+        if(rand<=sum) return item;
+    }
+}
+
+function openCase(caseData){
+    if(isOpening) return;
+    isOpening=true;
+    disableCases(true);
+
+    let saldo=getSaldo();
+    if(saldo<caseData.price){
+        alert("❌ Za mało pieniędzy!");
+        isOpening=false;
+        disableCases(false);
+        return;
+    }
+
+    saldo-=caseData.price;
+    setSaldo(saldo);
+    updateBalance();
+
+    const win=weightedRandom(generateItems(caseData.price,caseData.price>=10000));
+
+    setTimeout(()=>{
+        saldo=getSaldo()+Math.floor(win.value);
+        setSaldo(saldo);
+        updateBalance();
+
+        const box=document.getElementById("resultBox");
+        box.className="result-box "+win.rarity;
+        box.innerHTML=win.name+"<br>"+Math.floor(win.value)+" zł";
+
+        checkZero(saldo);
+        isOpening=false;
+        disableCases(false);
+    },300);
+}
+
+function disableCases(state){
+    document.querySelectorAll(".case")
+    .forEach(el=>state?el.classList.add("disabled"):el.classList.remove("disabled"));
+}
+
+function renderCases(){
+    const container=document.getElementById("cases");
+    cases.forEach(c=>{
+        const div=document.createElement("div");
+        div.className="case";
+        div.innerHTML="<h3>"+c.name+"</h3><p>Kliknij aby otworzyć</p>";
+        div.onclick=()=>openCase(c);
+        container.appendChild(div);
+    });
+}
+
+function renderDropInfo(){
+    const info=document.getElementById("dropInfo");
+    let html="<h3>📊 Drop</h3>";
+    cases.forEach(c=>{
+        html+="<b>"+c.name+"</b><br>";
+        generateItems(100,c.price>=10000)
+        .forEach(i=>html+=i.name+" — "+i.chance.toFixed(1)+"%<br>");
+        html+="<br>";
+    });
+    info.innerHTML=html;
+}
+
+renderCases();
+renderDropInfo();
+</script>
+
+<!-- ===== FIREBASE ===== -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "APIKEY",
+  authDomain: "kasynopz.firebaseapp.com",
+  databaseURL: "https://kasynopz-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "kasynopz",
+  storageBucket: "kasynopz.firebasestorage.app",
+  messagingSenderId: "816405578915",
+  appId: "APPID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const nick = localStorage.getItem("casinoNick");
+
+async function getSaldoFirebase(){
+    if(!nick) return;
+    const snap = await get(ref(db,"players/"+nick));
+    if(snap.exists()){
+        localStorage.setItem("saldo", snap.val().money);
+        document.getElementById("balance").innerText=snap.val().money;
+        checkZero(snap.val().money);
+    }
+}
+
+window.setSaldoFirebase = async function(v){
+    if(!nick) return;
+    await set(ref(db,"players/"+nick),{money:v});
+}
+
+window.checkZero = function(s){
+    if(s==0){
+        let btn=document.createElement("button");
+        btn.innerText="💰 Odbierz 1000 zł";
+        btn.style.fontSize="20px";
+        btn.onclick=async ()=>{
+            await setSaldoFirebase(1000);
+            location.reload();
+        };
+        document.body.appendChild(btn);
+    }
+}
+
+getSaldoFirebase();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blackjack PRO</title>
+
+<meta name="description" content="Blackjack PRO – gra kasyno online">
+<meta name="theme-color" content="#000000">
+</head>
+
+<body style="background:#000;color:white;text-align:center;font-family:Arial;">
+
+<h1>🎴 Blackjack PRO</h1>
+<h2 id="saldo"></h2>
+
+<a href="menu.html" style="color:white;font-size:18px;">
+⬅ Powrót do menu
+</a>
+
+<br><br>
+
+<input type="number" id="bet" placeholder="Kwota">
+<br><br>
+
+<button id="startBtn" onclick="start()">Start</button>
+<button id="hitBtn" onclick="dobierz()">Dobierz</button>
+<button id="stopBtn" onclick="stop()">Stop</button>
+
+<h2 id="info"></h2>
+
+<script>
+let suma = 0;
+let zaklad = 0;
+let graAktywna = false;
+
+if(localStorage.getItem("saldo") === null){
+    localStorage.setItem("saldo", 1000);
+}
+
+function updateSaldo(){
+    document.getElementById("saldo").innerText =
+    "💰 Saldo: " + localStorage.getItem("saldo") + " zł";
+}
+updateSaldo();
+
+function start(){
+    zaklad = parseInt(document.getElementById("bet").value);
+    let saldo = parseInt(localStorage.getItem("saldo"));
+
+    if(isNaN(zaklad) || zaklad<=0 || zaklad>saldo){
+        alert("Niepoprawny zakład!");
+        return;
+    }
+
+    suma = Math.floor(Math.random()*11)+1;
+    graAktywna = true;
+
+    document.getElementById("info").innerText =
+    "Twoja suma: " + suma;
+}
+
+function dobierz(){
+    if(!graAktywna) return;
+
+    suma += Math.floor(Math.random()*11)+1;
+
+    document.getElementById("info").innerText =
+    "Twoja suma: " + suma;
+
+    if(suma > 21){
+        let saldo = parseInt(localStorage.getItem("saldo"));
+        saldo -= Math.floor(zaklad * 2.5);
+        if(saldo<0) saldo=0;
+
+        localStorage.setItem("saldo", saldo);
+        setSaldoFirebase(saldo);
+
+        document.getElementById("info").innerText =
+        "💥 Przekroczyłeś 21!";
+        graAktywna = false;
+
+        updateSaldo();
+        checkZero(saldo);
+    }
+}
+
+function stop(){
+    if(!graAktywna) return;
+
+    let saldo = parseInt(localStorage.getItem("saldo"));
+
+    if(suma === 21){
+        saldo += zaklad * 4;
+        document.getElementById("info").innerText =
+        "🔥 Blackjack!";
+    }
+    else if(suma >= 17){
+        saldo += Math.floor(zaklad * 1.5);
+        document.getElementById("info").innerText =
+        "✅ Wygrana!";
+    }
+    else{
+        saldo -= zaklad;
+        document.getElementById("info").innerText =
+        "❌ Przegrana!";
+    }
+
+    if(saldo<0) saldo=0;
+
+    localStorage.setItem("saldo", saldo);
+    setSaldoFirebase(saldo);
+
+    graAktywna = false;
+    updateSaldo();
+    checkZero(saldo);
+}
+</script>
+
+<!-- ================= FIREBASE ================= -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "APIKEY",
+  authDomain: "kasynopz.firebaseapp.com",
+  databaseURL: "https://kasynopz-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "kasynopz",
+  storageBucket: "kasynopz.firebasestorage.app",
+  messagingSenderId: "816405578915",
+  appId: "APPID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const nick = localStorage.getItem("casinoNick");
+
+async function getSaldoFirebase(){
+    if(!nick) return;
+    const snap = await get(ref(db,"players/"+nick));
+    if(snap.exists()){
+        localStorage.setItem("saldo", snap.val().money);
+        updateSaldo();
+        checkZero(snap.val().money);
+    }
+}
+
+window.setSaldoFirebase = async function(v){
+    if(!nick) return;
+    await set(ref(db,"players/"+nick),{money:v});
+}
+
+window.checkZero = function(s){
+    if(s==0){
+        let btn=document.createElement("button");
+        btn.innerText="💰 Odbierz 1000 zł";
+        btn.style.fontSize="20px";
+        btn.onclick=async ()=>{
+            await setSaldoFirebase(1000);
+            location.reload();
+        };
+        document.body.appendChild(btn);
+    }
+}
+
+getSaldoFirebase();
+</script>
+
+</body>
+</html>

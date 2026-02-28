@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>Kasyno P.Z</title>
+
+<style>
+body{
+    margin:0;
+    font-family:Arial;
+    background:#1b1b1b;
+    color:white;
+    text-align:center;
+}
+.topbar{background:#222;padding:15px;}
+.menu a{
+    display:inline-block;
+    padding:10px 15px;
+    margin:5px;
+    background:#444;
+    color:white;
+    text-decoration:none;
+    border-radius:8px;
+}
+.menu a:hover{background:#666;}
+.stats{margin-top:20px;padding:15px;background:#222;}
+.loginBox{
+    position: fixed;
+    top:0;left:0;width:100%;height:100%;
+    background:#000c;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+    color:white;
+    z-index:999;
+}
+.loginBox input{padding:10px;font-size:18px;margin:10px;}
+.loginBox button{padding:10px 20px;font-size:18px;cursor:pointer;}
+</style>
+</head>
+
+<body>
+
+<div id="loginBox" class="loginBox">
+    <h2>Podaj swój nick 🎮</h2>
+    <input type="text" id="nicknameInput" placeholder="Twój nick">
+    <button onclick="saveNick()">Graj</button>
+</div>
+
+<div class="topbar">
+    <h1>🎰 Kasyno P.Z</h1>
+</div>
+
+<div class="menu">
+    <a href="index2.html">🎯 Ruletka</a>
+    <a href="index6.html">🎴 Blackjack</a> 
+   
+    <a href="index5.html">🪙 Moneta</a>
+    <a href="index8.html">💣 Miny</a>
+    <a href="index9.html">🐎 Wyścigi</a>
+    <a href="index11.html">🎰 Case Opener</a>
+    <a href="index12.html">🎯 Dart</a>
+    <a href="index13.html">🏒 Cymbergaj</a>
+</div>
+
+<div class="stats">
+    <h2>📊 Statystyki</h2>
+    <p id="playerNick"></p>
+    <p id="playerMoney"></p>
+</div>
+
+<br>
+<button onclick="resetGame()">🔄 Reset gry</button>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+/* ===== FIREBASE ===== */
+const firebaseConfig = {
+  apiKey: "APIKEY",
+  authDomain: "kasynopz.firebaseapp.com",
+  databaseURL: "https://kasynopz-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "kasynopz",
+  storageBucket: "kasynopz.firebasestorage.app",
+  messagingSenderId: "816405578915",
+  appId: "APPID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+let nick = localStorage.getItem("casinoNick");
+
+if(nick){
+    loadPlayer(nick);
+}
+
+/* ===== ZAPIS NICKU ===== */
+window.saveNick = function(){
+    let n = document.getElementById("nicknameInput").value.trim();
+    if(n.length < 2){
+        alert("Podaj nick!");
+        return;
+    }
+    localStorage.setItem("casinoNick", n);
+    loadPlayer(n);
+}
+
+/* ===== WCZYTANIE GRACZA ===== */
+function loadPlayer(nick){
+    document.getElementById("loginBox").style.display="none";
+    const playerRef = ref(db, "players/" + nick);
+
+    get(playerRef).then((snapshot)=>{
+        let money;
+
+        if(snapshot.exists()){
+            money = snapshot.val().money;
+        }else{
+            money = 1000;
+            set(playerRef,{money:1000});
+        }
+
+        // zapis do localStorage jako kopia
+        localStorage.setItem("saldo", money);
+
+        showStats(nick, money);
+    });
+}
+
+/* ===== WYŚWIETLANIE ===== */
+function showStats(nick,money){
+    document.getElementById("playerNick").innerText="👤 Nick: "+nick;
+    document.getElementById("playerMoney").innerText="💰 Konto: "+money+" zł";
+}
+
+/* ===== RESET ===== */
+window.resetGame = function(){
+    if(confirm("Na pewno zresetować konto?")){
+        let nick = localStorage.getItem("casinoNick");
+
+        if(nick){
+            set(ref(db,"players/"+nick),{money:1000});
+        }
+
+        localStorage.clear();
+        location.reload();
+    }
+}
+</script>
+
+</body>
+</html>

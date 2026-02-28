@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>🎯 Dart Pro</title>
+
+<style>
+body{
+  background:#0b0f1a;
+  color:white;
+  font-family:Arial;
+  text-align:center;
+}
+
+canvas{
+  background:#000;
+  border-radius:50%;
+  box-shadow:0 0 25px #000;
+}
+
+.controls{ margin-top:20px; }
+
+button{
+  padding:10px 18px;
+  margin:5px;
+  font-size:16px;
+  cursor:pointer;
+}
+
+.barWrap{
+  width:34px;
+  height:220px;
+  border:2px solid #555;
+  margin:15px;
+  position:relative;
+  background:#111;
+  display:inline-block;
+}
+
+.arrow{
+  position:absolute;
+  right:-18px;
+  width:0;
+  height:0;
+  border-top:10px solid transparent;
+  border-bottom:10px solid transparent;
+  border-left:18px solid red;
+  bottom:0%;
+}
+
+.perfect{
+  position:absolute;
+  left:0;
+  right:0;
+  height:6%;          /* MNIEJSZE ZIELONE */
+  background:#00ff66;
+  top:47%;
+  opacity:.35;
+}
+
+.value{
+  margin-top:5px;
+  font-size:14px;
+  color:#0f0;
+}
+
+#overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.7);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  font-size:48px;
+  z-index:999;
+}
+</style>
+</head>
+
+<body>
+<button onclick="location.href='menu.html'">⬅ Powrót do menu</button>
+<h2>🎯 Dart Pro</h2>
+
+Tryb gry:
+<select id="gameMode">
+  <option value="pvp">1 vs 1</option>
+  <option value="bot">1 vs BOT 🤖</option>
+</select>
+
+Poziom BOT:
+<select id="botLevel">
+  <option value="easy">Łatwy</option>
+  <option value="medium" selected>Średni</option>
+  <option value="hard">Trudny</option>
+  <option value="pro">Mistrz</option>
+</select>
+
+<br><br>
+
+Tryb:
+<select id="mode">
+  <option>301</option>
+  <option selected>501</option>
+  <option>1001</option>
+</select>
+<button onclick="newGame()">Nowa gra</button>
+
+<div>
+Gracz 1: <span id="s1">501</span> |
+Gracz 2: <span id="s2">501</span><br>
+Wygrane — G1: <span id="w1">0</span> |
+G2: <span id="w2">0</span>
+</div>
+
+<br>
+
+<canvas id="board" width="460" height="460"></canvas>
+
+<br>
+
+<div style="display:flex; justify-content:center; gap:40px;">
+
+<div>
+<div><b>PION</b></div>
+<div class="barWrap">
+<div class="perfect"></div>
+<div class="arrow" id="vFill"></div>
+</div>
+<div class="value" id="vVal">0</div>
+</div>
+
+<div>
+<div><b>POZIOM</b></div>
+<div class="barWrap">
+<div class="perfect"></div>
+<div class="arrow" id="hFill"></div>
+</div>
+<div class="value" id="hVal">0</div>
+</div>
+
+<div>
+<div><b>SIŁA</b></div>
+<div class="barWrap">
+<div class="perfect"></div>
+<div class="arrow" id="sFill"></div>
+</div>
+<div class="value" id="sVal">0</div>
+</div>
+
+</div>
+
+<div class="controls">
+<button id="vBtn">START PION</button>
+<button id="hBtn" disabled>START POZIOM</button>
+<button id="sBtn" disabled>START SIŁA</button>
+</div>
+
+<div id="overlay"></div>
+
+<script>
+// ================= STATE =================
+const canvas=document.getElementById("board");
+const ctx=canvas.getContext("2d");
+
+const numbers=[20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
+
+let mode=501;
+let scores=[501,501];
+let wins=[0,0];
+let player=0;
+let throwCount=0;
+
+let running=false;
+let gameLocked=false;
+
+const cx=230, cy=230, R=190;
+
+// ===== PERFECT RANGE =====
+const PERFECT_MIN=47;
+const PERFECT_MAX=53;
+function inGreen(v){ return v>=PERFECT_MIN && v<=PERFECT_MAX; }
+
+// ================= BOARD =================
+function drawBoard(){
+  ctx.clearRect(0,0,460,460);
+
+  ctx.beginPath();
+  ctx.arc(cx,cy,R,0,Math.PI*2);
+  ctx.fillStyle="#111";
+  ctx.fill();
+
+  for(let i=0;i<20;i++){
+    const a1=(i*18-9)*Math.PI/180;
+    const a2=((i+1)*18-9)*Math.PI/180;
+
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,R,a1,a2);
+    ctx.closePath();
+    ctx.fillStyle=i%2?"#ddd":"#111";
+    ctx.fill();
+    ctx.strokeStyle="#888";
+    ctx.stroke();
+  }
+
+  ring(110,125,"#0a3","#e11");
+  ring(165,180,"#0a3","#e11");
+
+  ctx.beginPath();
+  ctx.arc(cx,cy,10,0,Math.PI*2);
+  ctx.fillStyle="red";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx,cy,20,0,Math.PI*2);
+  ctx.strokeStyle="green";
+  ctx.stroke();
+
+  ctx.fillStyle="white";
+  ctx.font="16px Arial";
+  ctx.textAlign="center";
+  ctx.textBaseline="middle";
+
+  numbers.forEach((n,i)=>{
+    const ang=(i*18-90)*Math.PI/180;
+    const r=225;
+    ctx.fillText(n,cx+Math.cos(ang)*r,cy+Math.sin(ang)*r);
+  });
+}
+
+function ring(r1,r2,c1,c2){
+  for(let i=0;i<20;i++){
+    const a1=(i*18-9)*Math.PI/180;
+    const a2=((i+1)*18-9)*Math.PI/180;
+
+    ctx.beginPath();
+    ctx.arc(cx,cy,r2,a1,a2);
+    ctx.arc(cx,cy,r1,a2,a1,true);
+    ctx.closePath();
+    ctx.fillStyle=i%2?c1:c2;
+    ctx.fill();
+  }
+}
+
+// ===== BARS WITH VALUE DISPLAY =====
+function startBar(btn,fill,done,valBox){
+  if(running||gameLocked) return;
+  running=true;
+  btn.textContent="STOP";
+
+  let pos=0,dir=1;
+
+  const id=setInterval(()=>{
+    pos+=dir*3;
+    if(pos>100||pos<0) dir*=-1;
+    fill.style.bottom=pos+"%";
+    btn.dataset.pos=pos;
+    valBox.innerText=Math.round(pos); // <<< POKAZUJE 1-100
+  },20);
+
+  btn.onclick=()=>{
+    clearInterval(id);
+    btn.textContent="START";
+    running=false;
+    btn.onclick=()=>startBar(btn,fill,done,valBox);
+    done(Number(btn.dataset.pos));
+  };
+}
+
+// ===== THROW LOGIC =====
+function doThrow(v,h,s){
+  if(gameLocked) return;
+  gameLocked=true;
+  setTimeout(()=>gameLocked=false,1000);
+
+  if(inGreen(v)&&inGreen(h)&&inGreen(s)){
+    animateDart(cx,cy);
+    scores[player]-=50;
+    updateUI();
+    return;
+  }
+
+  let vert=(v-50)/50;
+  let horiz=(50-h)/50;
+  let power=(s-50)/50;
+
+  let dist=R*(0.6+power*0.6)+vert*40;
+  let ang=-Math.PI/2+horiz*Math.PI/3;
+
+  let x=cx+Math.cos(ang)*dist;
+  let y=cy+Math.sin(ang)*dist;
+
+  if(Math.hypot(x-cx,y-cy)>R+8){
+    overlay.style.display="flex";
+    overlay.innerText="Ups nie trafiłeś";
+    setTimeout(()=>overlay.style.display="none",1000);
+    drawBoard();
+    return;
+  }
+
+  animateDart(x,y);
+  const pts=sectorScore(x,y);
+  scores[player]-=pts;
+  updateUI();
+}
+
+function animateDart(x,y){
+  let t=0;
+  function frame(){
+    t+=0.08;
+    drawBoard();
+    ctx.beginPath();
+    ctx.arc(cx+(x-cx)*t,cy+(y-cy)*t,6,0,Math.PI*2);
+    ctx.fillStyle="red";
+    ctx.fill();
+    if(t<1) requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+function sectorScore(x,y){
+  const dx=x-cx, dy=y-cy;
+  const dist=Math.sqrt(dx*dx+dy*dy);
+  const ang=(Math.atan2(dy,dx)*180/Math.PI+450)%360;
+  const idx=Math.floor(ang/18);
+  let base=numbers[idx];
+
+  if(dist<10) return 50;
+  if(dist<20) return 25;
+  if(dist>165&&dist<180) return base*2;
+  if(dist>110&&dist<125) return base*3;
+
+  return base;
+}
+
+function updateUI(){
+  s1.textContent=scores[0];
+  s2.textContent=scores[1];
+  w1.textContent=wins[0];
+  w2.textContent=wins[1];
+}
+
+function newGame(){
+  mode=parseInt(document.getElementById("mode").value);
+  scores=[mode,mode];
+  throwCount=0;
+  player=0;
+  updateUI();
+  drawBoard();
+}
+
+vBtn.onclick=()=>startBar(vBtn,vFill,(v)=>{
+  hBtn.disabled=false;
+  vBtn.disabled=true;
+  vBtn.dataset.val=v;
+},vVal);
+
+hBtn.onclick=()=>startBar(hBtn,hFill,(h)=>{
+  sBtn.disabled=false;
+  hBtn.disabled=true;
+  hBtn.dataset.val=h;
+},hVal);
+
+sBtn.onclick=()=>startBar(sBtn,sFill,(s)=>{
+  doThrow(Number(vBtn.dataset.val),Number(hBtn.dataset.val),s);
+  vBtn.disabled=false;
+  hBtn.disabled=true;
+  sBtn.disabled=true;
+},sVal);
+
+newGame();
+</script>
+
+</body>
+</html>

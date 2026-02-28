@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wyścigi</title>
+
+<meta name="description" content="Wyścigi konne – gra kasyno online">
+<meta name="theme-color" content="#222222">
+</head>
+
+<body style="background:#222;color:white;text-align:center;font-family:Arial;">
+
+<h1>🐎 Wyścigi</h1>
+<h2 id="saldo"></h2>
+
+<a href="menu.html" style="color:white">⬅ Powrót do menu</a>
+<br><br>
+
+<input type="number" id="bet" placeholder="Kwota">
+<input type="number" id="wybor" placeholder="1-5"><br><br>
+<button onclick="graj()">Start</button>
+
+<h2 id="wynik"></h2>
+
+<script>
+if(!localStorage.getItem("saldo")){
+    localStorage.setItem("saldo",1000);
+}
+
+function up(){
+    document.getElementById("saldo").innerText=
+    "Saldo: "+localStorage.getItem("saldo")+" zł";
+}
+up();
+
+function graj(){
+
+let bet=parseInt(document.getElementById("bet").value);
+let wybor=parseInt(document.getElementById("wybor").value);
+let saldo=parseInt(localStorage.getItem("saldo"));
+
+if(isNaN(bet)||bet<=0||bet>saldo||isNaN(wybor)||wybor<1||wybor>5){
+    alert("Błąd");
+    return;
+}
+
+let win=Math.floor(Math.random()*5)+1;
+
+if(wybor===win){
+    saldo+=bet*4;
+    document.getElementById("wynik").innerText=
+    "Wygrał koń "+win+"! +4x";
+}else{
+    saldo-=bet;
+    document.getElementById("wynik").innerText=
+    "Wygrał koń "+win+"! Przegrana";
+}
+
+if(saldo<0) saldo=0;
+
+localStorage.setItem("saldo",saldo);
+up();
+setSaldoFirebase(saldo);
+checkZero(saldo);
+}
+</script>
+
+<!-- ================= FIREBASE ================= -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "APIKEY",
+  authDomain: "kasynopz.firebaseapp.com",
+  databaseURL: "https://kasynopz-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "kasynopz",
+  storageBucket: "kasynopz.firebasestorage.app",
+  messagingSenderId: "816405578915",
+  appId: "APPID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const nick = localStorage.getItem("casinoNick");
+
+async function getSaldoFirebase(){
+    if(!nick) return;
+    const snap = await get(ref(db,"players/"+nick));
+    if(snap.exists()){
+        localStorage.setItem("saldo", snap.val().money);
+        up();
+        checkZero(snap.val().money);
+    }
+}
+
+window.setSaldoFirebase = async function(v){
+    if(!nick) return;
+    await set(ref(db,"players/"+nick),{money:v});
+}
+
+window.checkZero = function(s){
+    if(s==0){
+        let btn=document.createElement("button");
+        btn.innerText="💰 Odbierz 1000 zł";
+        btn.style.fontSize="20px";
+        btn.onclick=async ()=>{
+            await setSaldoFirebase(1000);
+            location.reload();
+        };
+        document.body.appendChild(btn);
+    }
+}
+
+getSaldoFirebase();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Moneta</title>
+</head>
+<body style="background:#111;color:white;text-align:center;font-family:Arial;">
+
+<h1>🪙 Rzut Monetą</h1>
+<h2 id="saldo"></h2>
+
+<input type="number" id="bet" placeholder="Kwota">
+<br><br>
+<button onclick="graj('orzel')">Orzeł</button>
+<button onclick="graj('reszka')">Reszka</button>
+
+<h2 id="wynik"></h2>
+<button onclick="location.href='menu.html'">⬅ Powrót do menu</button>
+<script>
+if(localStorage.getItem("saldo")==null){
+ localStorage.setItem("saldo",1000);
+}
+
+function updateSaldo(){
+ document.getElementById("saldo").innerText=
+ "Saldo: "+localStorage.getItem("saldo")+" zł";
+}
+updateSaldo();
+
+function graj(wybor){
+ let bet=parseInt(document.getElementById("bet").value);
+ let saldo=parseInt(localStorage.getItem("saldo"));
+
+ if(isNaN(bet)||bet<=0||bet>saldo){
+  alert("Niepoprawny zakład!");
+  return;
+ }
+
+ let wynik=Math.random()<0.5?"orzel":"reszka";
+
+ if(wybor===wynik){
+  saldo+=bet;
+  document.getElementById("wynik").innerText="Wynik: "+wynik+" — WYGRANA!";
+ }else{
+  saldo-=bet;
+  document.getElementById("wynik").innerText="Wynik: "+wynik+" — PRZEGRANA!";
+ }
+
+ localStorage.setItem("saldo",saldo);
+ updateSaldo();
+
+ if(window.saveMoney){
+  window.saveMoney(saldo);
+ }
+}
+</script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig={
+ apiKey:"APIKEY",
+ authDomain:"kasynopz.firebaseapp.com",
+ databaseURL:"https://kasynopz-default-rtdb.europe-west1.firebasedatabase.app",
+ projectId:"kasynopz",
+ storageBucket:"kasynopz.firebasestorage.app",
+ messagingSenderId:"816405578915",
+ appId:"APPID"
+};
+
+const app=initializeApp(firebaseConfig);
+const db=getDatabase(app);
+let nick=localStorage.getItem("casinoNick");
+
+window.saveMoney=function(money){
+ if(nick){
+  set(ref(db,"players/"+nick),{money});
+ }
+}
+</script>
+
+</body>
+</html>

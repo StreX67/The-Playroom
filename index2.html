@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>🎰 Ruletka PRO</title>
+
+<style>
+body{
+    background:linear-gradient(180deg,#0f1220,#090b18);
+    color:white;
+    text-align:center;
+    font-family:Arial;
+}
+
+#saldo{
+    font-size:24px;
+    margin:20px;
+}
+
+.pointer{
+    width:0;
+    height:0;
+    border-left:15px solid transparent;
+    border-right:15px solid transparent;
+    border-bottom:30px solid yellow;
+    margin:auto;
+}
+
+/* ===== KOŁO RULETKI ===== */
+.ruletka{
+    width:340px;
+    height:340px;
+    border-radius:50%;
+    border:10px solid white;
+    margin:20px auto;
+    transition:transform 4s ease-out;
+
+    background:conic-gradient(
+        red 0deg 30deg,
+        black 30deg 60deg,
+        red 60deg 90deg,
+        black 90deg 120deg,
+        red 120deg 150deg,
+        black 150deg 180deg,
+        red 180deg 210deg,
+        black 210deg 240deg,
+        red 240deg 270deg,
+        black 270deg 300deg,
+        red 300deg 330deg,
+        black 330deg 360deg
+    );
+}
+
+button{
+    padding:12px 22px;
+    font-size:16px;
+    margin:8px;
+    cursor:pointer;
+    border:none;
+    border-radius:8px;
+}
+
+.red{background:#d11;}
+.black{background:#222;color:white;}
+.back{background:#555;margin-top:20px;}
+
+input{
+    padding:8px;
+    font-size:16px;
+    width:160px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🎰 Ruletka PRO</h1>
+<div id="saldo"></div>
+
+<div class="pointer"></div>
+<div class="ruletka" id="wheel"></div>
+
+<br>
+
+<input type="number" id="bet" placeholder="Kwota zakładu">
+<br>
+<button class="red" onclick="spin('red')">Czerwone</button>
+<button class="black" onclick="spin('black')">Czarne</button>
+
+<br>
+<button class="back" onclick="location.href='menu.html'">
+⬅ Powrót do menu
+</button>
+
+<script>
+if(localStorage.getItem("saldo")==null)
+    localStorage.setItem("saldo",1000);
+
+function updateSaldo(){
+    document.getElementById("saldo").innerText=
+        "💰 Saldo: "+localStorage.getItem("saldo")+" zł";
+}
+updateSaldo();
+
+const wheel=document.getElementById("wheel");
+
+function spin(colorBet){
+
+let bet=parseInt(document.getElementById("bet").value);
+let saldo=parseInt(localStorage.getItem("saldo"));
+
+if(isNaN(bet)||bet<=0) return alert("Podaj kwotę");
+if(bet>saldo) return alert("Brak pieniędzy");
+
+let deg=Math.floor(Math.random()*360)+1440;
+wheel.style.transform="rotate("+deg+"deg)";
+
+setTimeout(()=>{
+
+let sector=Math.floor((deg%360)/30);
+let color = sector%2==0 ? "red" : "black";
+
+if(color==colorBet){
+saldo+=bet;
+alert("🎉 Wygrana!");
+}else{
+saldo-=bet;
+alert("❌ Przegrana");
+}
+
+localStorage.setItem("saldo",saldo);
+updateSaldo();
+
+},4000);
+}
+</script>
+
+</body>
+</html>
