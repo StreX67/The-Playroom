@@ -26,7 +26,6 @@ body{
     margin:auto;
 }
 
-/* ===== KOŁO RULETKI ===== */
 .ruletka{
     width:340px;
     height:340px;
@@ -118,18 +117,25 @@ wheel.style.transform="rotate("+deg+"deg)";
 setTimeout(()=>{
 
 let sector=Math.floor((deg%360)/30);
-let color = sector%2==0 ? "red" : "black";
+
+/* ✅ POPRAWIONA ZAMIANA KOLORÓW */
+let color = sector%2==0 ? "black" : "red";
 
 if(color==colorBet){
-saldo+=bet;
-alert("🎉 Wygrana!");
+    saldo+=bet;
+    alert("🎉 Wygrana!");
 }else{
-saldo-=bet;
-alert("❌ Przegrana");
+    saldo-=bet;
+    alert("❌ Przegrana");
 }
 
 localStorage.setItem("saldo",saldo);
 updateSaldo();
+
+/* ✅ DODANY ZAPIS DO INNYCH GIER */
+if(window.saveMoney){
+    window.saveMoney(saldo);
+}
 
 },4000);
 }
@@ -137,4 +143,3 @@ updateSaldo();
 
 </body>
 </html>
-
