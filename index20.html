@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>Kółko i Krzyżyk</title>
+
+
+<link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+
+<h1>Kółko i Krzyżyk</h1>
+<h2 id="wynik"></h2>
+<h3>
+X: <span id="xWins">0</span> | 
+O: <span id="oWins">0</span> | 
+Remisy: <span id="remisy">0</span>
+</h3>
+<!-- 🔙 PRZYCISK POWROTU -->
+<button class="back" onclick="location.href='index.html'">⬅ Powrót do menu</button>
+<br><br>
+<div class="board">
+
+<div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+<div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+<div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+<div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+<div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+
+</div>
+
+<script>
+const cells = document.querySelectorAll(".cell");
+const wynik = document.getElementById("wynik");
+
+const xWinsSpan = document.getElementById("xWins");
+const oWinsSpan = document.getElementById("oWins");
+const remisySpan = document.getElementById("remisy");
+
+let xWins = 0;
+let oWins = 0;
+let remisy = 0;
+
+let gracz = "X";
+let plansza = Array(25).fill("");
+
+const wygrane = [
+
+    [0,1,2,3],[1,2,3,4],
+    [5,6,7,8],[6,7,8,9],
+    [10,11,12,13],[11,12,13,14],
+    [15,16,17,18],[16,17,18,19],
+    [20,21,22,23],[21,22,23,24],
+
+    [0,5,10,15],[5,10,15,20],
+    [1,6,11,16],[6,11,16,21],
+    [2,7,12,17],[7,12,17,22],
+    [3,8,13,18],[8,13,18,23],
+    [4,9,14,19],[9,14,19,24],
+
+    [0,6,12,18],[6,12,18,24],
+    [1,7,13,19],
+    [5,11,17,23],
+
+    [3,7,11,15],[7,11,15,19],
+    [4,8,12,16],
+    [9,13,17,21]
+];
+
+cells.forEach((cell, i) => {
+    cell.onclick = function() {
+
+        if(plansza[i] !== "") return;
+
+        plansza[i] = gracz;
+        cell.textContent = gracz;
+
+
+        cell.classList.add(gracz === "X" ? "x" : "o");
+
+        sprawdz();
+
+        gracz = (gracz === "X") ? "O" : "X";
+    }
+});
+
+function sprawdz(){
+
+    for(let combo of wygrane){
+
+        let [a,b,c,d] = combo;
+
+        if(
+            plansza[a] !== "" &&
+            plansza[a] === plansza[b] &&
+            plansza[a] === plansza[c] &&
+            plansza[a] === plansza[d]
+        ){
+
+            wynik.textContent = "Wygrywa 🎉: " + plansza[a];
+
+            if(plansza[a] === "X"){
+                xWins++;
+                xWinsSpan.textContent = xWins;
+            } else {
+                oWins++;
+                oWinsSpan.textContent = oWins;
+            }
+
+            zablokuj();
+            return;
+        }
+    }
+
+    if(!plansza.includes("")){
+        wynik.textContent = "Remis 🤝";
+        remisy++;
+        remisySpan.textContent = remisy;
+        zablokuj();
+    }
+}
+
+function zablokuj(){
+    cells.forEach(cell => cell.onclick = null);
+}
+</script>
+
+<button onclick="ZagrajPonownie()">Zagraj ponownie</button>
+
+<script src="script.js"></script>
+
+</body>
+</html>
