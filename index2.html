@@ -11,29 +11,18 @@ body{
     text-align:center;
     font-family:Arial;
 }
-
-#saldo{
-    font-size:24px;
-    margin:20px;
-}
-
+#saldo{font-size:24px;margin:20px;}
 .pointer{
-    width:0;
-    height:0;
+    width:0;height:0;
     border-left:15px solid transparent;
     border-right:15px solid transparent;
     border-bottom:30px solid yellow;
     margin:auto;
 }
-
 .ruletka{
-    width:340px;
-    height:340px;
-    border-radius:50%;
-    border:10px solid white;
-    margin:20px auto;
+    width:340px;height:340px;border-radius:50%;
+    border:10px solid white;margin:20px auto;
     transition:transform 4s ease-out;
-
     background:conic-gradient(
         black 0deg 30deg,
         red 30deg 60deg,
@@ -49,25 +38,11 @@ body{
         red 330deg 360deg
     );
 }
-
-button{
-    padding:12px 22px;
-    font-size:16px;
-    margin:8px;
-    cursor:pointer;
-    border:none;
-    border-radius:8px;
-}
-
+button{padding:12px 22px;font-size:16px;margin:8px;cursor:pointer;border:none;border-radius:8px;}
 .red{background:#d11;}
 .black{background:#222;color:white;}
 .back{background:#555;margin-top:20px;}
-
-input{
-    padding:8px;
-    font-size:16px;
-    width:160px;
-}
+input{padding:8px;font-size:16px;width:160px;}
 </style>
 </head>
 
@@ -80,18 +55,33 @@ input{
 <div class="ruletka" id="wheel"></div>
 
 <br>
-
 <input type="number" id="bet" placeholder="Kwota zakładu">
 <br>
 <button class="red" onclick="spin('red')">Czerwone</button>
 <button class="black" onclick="spin('black')">Czarne</button>
-
 <br>
-<button class="back" onclick="location.href='index.html'">
-⬅ Powrót do menu
-</button>
+<button class="back" onclick="location.href='index.html'">⬅ Powrót do menu</button>
 
-<script>
+<script type="module">
+
+/* ===== FIREBASE ===== */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "APIKEY",
+  authDomain: "kasynopz.firebaseapp.com",
+  databaseURL: "https://kasynopz-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "kasynopz",
+  storageBucket: "kasynopz.firebasestorage.app",
+  messagingSenderId: "816405578915",
+  appId: "APPID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+/* ===== SALDO ===== */
 if(localStorage.getItem("saldo")==null)
     localStorage.setItem("saldo",1000);
 
@@ -103,7 +93,15 @@ updateSaldo();
 
 const wheel=document.getElementById("wheel");
 
-function spin(colorBet){
+/* ===== ZAPIS DO FIREBASE ===== */
+function saveToFirebase(newSaldo){
+    let nick = localStorage.getItem("casinoNick");
+    if(!nick) return;
+    set(ref(db,"players/"+nick),{money:newSaldo});
+}
+
+/* ===== RULETKA ===== */
+window.spin=function(colorBet){
 
 let bet=parseInt(document.getElementById("bet").value);
 let saldo=parseInt(localStorage.getItem("saldo"));
@@ -117,8 +115,6 @@ wheel.style.transform="rotate("+deg+"deg)";
 setTimeout(()=>{
 
 let sector=Math.floor((deg%360)/30);
-
-/* ✅ POPRAWIONA ZAMIANA KOLORÓW */
 let color = sector%2==0 ? "black" : "red";
 
 if(color==colorBet){
@@ -130,15 +126,12 @@ if(color==colorBet){
 }
 
 localStorage.setItem("saldo",saldo);
+saveToFirebase(saldo);   /* ⭐ TU BYŁ PROBLEM */
 updateSaldo();
-
-/* ✅ DODANY ZAPIS DO INNYCH GIER */
-if(window.saveMoney){
-    window.saveMoney(saldo);
-}
 
 },4000);
 }
+
 </script>
 
 </body>
