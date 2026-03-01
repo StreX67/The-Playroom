@@ -64,7 +64,6 @@ input{padding:8px;font-size:16px;width:160px;}
 
 <script type="module">
 
-/* ===== FIREBASE ===== */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
@@ -81,35 +80,29 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-/* ===== SALDO ===== */
-if(localStorage.getItem("saldo")==null)
-    localStorage.setItem("saldo",1000);
+function saveMoney(saldo){
 
-function updateSaldo(){
-    document.getElementById("saldo").innerText=
-        "💰 Saldo: "+localStorage.getItem("saldo")+" zł";
-}
-updateSaldo();
-
-const wheel=document.getElementById("wheel");
-
-/* ===== ZAPIS DO FIREBASE ===== */
-function saveToFirebase(newSaldo){
     let nick = localStorage.getItem("casinoNick");
-    if(!nick) return;
-    set(ref(db,"players/"+nick),{money:newSaldo});
+
+    if(!nick){
+        alert("Najpierw zaloguj się w menu!");
+        return;
+    }
+
+    set(ref(db,"players/"+nick+"/money"), saldo);
 }
 
-/* ===== RULETKA ===== */
 window.spin=function(colorBet){
 
 let bet=parseInt(document.getElementById("bet").value);
-let saldo=parseInt(localStorage.getItem("saldo"));
+let saldo=parseInt(localStorage.getItem("saldo")||1000);
 
 if(isNaN(bet)||bet<=0) return alert("Podaj kwotę");
 if(bet>saldo) return alert("Brak pieniędzy");
 
-let deg=Math.floor(Math.random()*360)+1440;
+let spins = Math.floor(Math.random()*10)+15;
+let deg = spins*360 + Math.floor(Math.random()*360);
+
 wheel.style.transform="rotate("+deg+"deg)";
 
 setTimeout(()=>{
@@ -117,17 +110,13 @@ setTimeout(()=>{
 let sector=Math.floor((deg%360)/30);
 let color = sector%2==0 ? "black" : "red";
 
-if(color==colorBet){
-    saldo+=bet;
-    alert("🎉 Wygrana!");
-}else{
-    saldo-=bet;
-    alert("❌ Przegrana");
-}
+if(color==colorBet) saldo+=bet;
+else saldo-=bet;
 
 localStorage.setItem("saldo",saldo);
-saveToFirebase(saldo);   /* ⭐ TU BYŁ PROBLEM */
-updateSaldo();
+saveMoney(saldo);
+
+document.getElementById("saldo").innerText="💰 Saldo: "+saldo+" zł";
 
 },4000);
 }
