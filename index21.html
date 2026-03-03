@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Statki 15x15</title>
+<style>
+body{
+background:#061b3a;
+color:white;
+font-family:Arial;
+text-align:center;
+}
+
+.board{
+display:grid;
+grid-template-columns:repeat(15,30px);
+grid-template-rows:repeat(15,30px);
+gap:2px;
+margin:20px auto;
+width:max-content;
+}
+
+.cell{
+width:30px;
+height:30px;
+background:#0b2f66;
+cursor:pointer;
+}
+
+.ship{ background:red; }
+.hit{ background:orange; }
+.miss{ background:#4aa3ff; }
+
+#boards{
+display:flex;
+justify-content:center;
+gap:60px;
+flex-wrap:wrap;
+}
+
+button,select{
+padding:8px;
+margin:5px;
+}
+</style>
+</head>
+<body>
+
+<h1>STATKI 15x15</h1>
+
+Tryb:
+<select id="mode">
+<option value="bot">Vs Bot</option>
+<option value="pvp">1v1</option>
+</select>
+
+Poziom bota:
+<select id="bot">
+<option value="1">Łatwy</option>
+<option value="2">Średni</option>
+<option value="3">Trudny</option>
+</select>
+
+<button onclick="startGame()">Rozpocznij</button>
+
+<p id="info"></p>
+
+<div id="boards">
+<div>
+<h3>Twoja plansza</h3>
+<div id="playerBoard" class="board"></div>
+</div>
+
+<div>
+<h3>Plansza przeciwnika</h3>
+<div id="enemyBoard" class="board"></div>
+</div>
+</div>
+
+<script>
+
+const SIZE=15;
+let playerBoard,enemyBoard;
+let ships=[4,3,3,2,2,2];
+let placing=true;
+let shipIndex=0;
+let horizontal=true;
+let turn="player";
+let botHits=[];
+
+const playerDiv=document.getElementById("playerBoard");
+const enemyDiv=document.getElementById("enemyBoard");
+const info=document.getElementById("info");
+
+//////////////////////////////////////////////////
+
+function emptyBoard(){
+let b=[];
+for(let y=0;y<SIZE;y++){
+b[y]=[];
+for(let x=0;x<SIZE;x++) b[y][x]=0;
+}
+return b;
+}
+
+//////////////////////////////////////////////////
+
+function startGame(){
+playerBoard=emptyBoard();
+enemyBoard=emptyBoard();
+createBoard(playerDiv,false);
+createBoard(enemyDiv,true);
+
+placing=true;
+shipIndex=0;
+botHits=[];
+turn="player";
+info.innerText="Ustaw statek długości "+ships[shipIndex]+" (R obrót)";
+}
+
+//////////////////////////////////////////////////
+
+function createBoard(div,isEnemy){
+div.innerHTML="";
+for(let y=0;y<SIZE;y++){
+for(let x=0;x<SIZE;x++){
+let c=document.createElement("div");
+c.className="cell";
+
+c.onclick=()=>{
+if(placing && !isEnemy) placeShip(x,y);
+else if(!placing && isEnemy && turn==="player") playerShot(x,y);
+};
+
+div.appendChild(c);
+}
+}
+}
+
+//////////////////////////////////////////////////
+
+document.addEventListener("keydown",e=>{
+if(e.key==="r") horizontal=!horizontal;
+});
+
+//////////////////////////////////////////////////
+
+function placeShip(x,y){
+let len=ships[shipIndex];
+if(canPlace(playerBoard,x,y,len)){
+for(let i=0;i<len;i++){
+let nx=horizontal?x+i:x;
+let ny=horizontal?y:y+i;
+playerBoard[ny][nx]=1;
+}
+render(playerDiv,playerBoard,true);
+
+shipIndex++;
+if(shipIndex>=ships.length){
+placing=false;
+placeBotShips();
+info.innerText="Gra rozpoczęta!";
+}else{
+info.innerText="Ustaw statek długości "+ships[shipIndex];
+}
+}
+}
+
+function canPlace(board,x,y,len){
+for(let i=0;i<len;i++){
+let nx=horizontal?x+i:x;
+let ny=horizontal?y:y+i;
+if(nx>=SIZE||ny>=SIZE||board[ny][nx]!==0) return false;
+}
+return true;
+}
+
+//////////////////////////////////////////////////
+// BOT STATKI
+//////////////////////////////////////////////////
+
+function placeBotShips(){
+for(let len of ships){
+let placed=false;
+while(!placed){
+let x=Math.floor(Math.random()*SIZE);
+let y=Math.floor(Math.random()*SIZE);
+let dir=Math.random()<0.5;
+if(canPlaceBot(enemyBoard,x,y,len,dir)){
+for(let i=0;i<len;i++){
+let nx=dir?x+i:x;
+let ny=dir?y:y+i;
+enemyBoard[ny][nx]=1;
+}
+placed=true;
+}
+}
+}
+}
+
+function canPlaceBot(board,x,y,len,dir){
+for(let i=0;i<len;i++){
+let nx=dir?x+i:x;
+let ny=dir?y:y+i;
+if(nx>=SIZE||ny>=SIZE||board[ny][nx]!==0) return false;
+}
+return true;
+}
+
+//////////////////////////////////////////////////
+// STRZAŁ
+//////////////////////////////////////////////////
+
+function playerShot(x,y){
+if(enemyBoard[y][x]===0){
+enemyBoard[y][x]=3;
+info.innerText="Pudło!";
+}
+else if(enemyBoard[y][x]===1){
+enemyBoard[y][x]=2;
+info.innerText=checkSunk(enemyBoard,x,y)?"🔥 Statek zatopiony!":"Trafiony!";
+}
+else return;
+
+render(enemyDiv,enemyBoard,false);
+
+if(checkWin(enemyBoard)){
+info.innerText="🏆 Wygrałeś!";
+placing=true;
+return;
+}
+
+turn="enemy";
+setTimeout(botMove,600);
+}
+
+//////////////////////////////////////////////////
+// BOT
+//////////////////////////////////////////////////
+
+function botMove(){
+if(document.getElementById("mode").value==="pvp"){
+turn="player";
+return;
+}
+
+let lvl=parseInt(document.getElementById("bot").value);
+let shot = lvl===1? randomShot() :
+lvl===2? mediumShot() :
+hardShot();
+
+botShoot(shot[0],shot[1]);
+turn="player";
+}
+
+function randomShot(){
+let x,y;
+do{
+x=Math.floor(Math.random()*SIZE);
+y=Math.floor(Math.random()*SIZE);
+}while(playerBoard[y][x]>=2);
+return [x,y];
+}
+
+function mediumShot(){
+if(botHits.length){
+let [hx,hy]=botHits[0];
+let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+for(let d of dirs){
+let nx=hx+d[0],ny=hy+d[1];
+if(nx>=0&&ny>=0&&nx<SIZE&&ny<SIZE && playerBoard[ny][nx]<2)
+return [nx,ny];
+}
+}
+return randomShot();
+}
+
+function hardShot(){
+if(botHits.length){
+let [hx,hy]=botHits[0];
+let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+for(let d of dirs){
+for(let i=1;i<5;i++){
+let nx=hx+d[0]*i,ny=hy+d[1]*i;
+if(nx>=0&&ny>=0&&nx<SIZE&&ny<SIZE && playerBoard[ny][nx]<2)
+return [nx,ny];
+}
+}
+}
+return randomShot();
+}
+
+function botShoot(x,y){
+if(playerBoard[y][x]===1){
+playerBoard[y][x]=2;
+botHits=[[x,y]];
+info.innerText="🤖 Bot trafił!";
+}else{
+playerBoard[y][x]=3;
+info.innerText="🤖 Bot spudłował!";
+}
+render(playerDiv,playerBoard,true);
+
+if(checkWin(playerBoard)){
+info.innerText="💀 Bot wygrał!";
+placing=true;
+}
+}
+
+//////////////////////////////////////////////////
+
+function checkSunk(board,x,y){
+return !board.flat().includes(1);
+}
+
+function checkWin(board){
+return !board.flat().includes(1);
+}
+
+//////////////////////////////////////////////////
+
+function render(div,board,showShips){
+let cells=div.children;
+let i=0;
+for(let y=0;y<SIZE;y++){
+for(let x=0;x<SIZE;x++){
+cells[i].className="cell";
+if(board[y][x]===1 && showShips) cells[i].classList.add("ship");
+if(board[y][x]===2) cells[i].classList.add("hit");
+if(board[y][x]===3) cells[i].classList.add("miss");
+i++;
+}
+}
+}
+
+</script>
+</body>
+</html>
