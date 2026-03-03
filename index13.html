@@ -2,69 +2,130 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
-<title>Cymbergaj</title>
+<title>Cymbergaj PRO Balanced</title>
 
 <style>
-body{margin:0;background:#08101f;color:white;text-align:center;font-family:Arial}
-canvas{background:#0f2a4d;margin:20px auto;display:block;border-radius:15px}
-#msg{position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);
-font-size:40px;background:#000a;padding:20px;border-radius:10px;display:none}
-button,select{font-size:16px;margin:5px;padding:6px 12px;border-radius:6px;border:none;cursor:pointer}
-.back{background:#444;color:white;margin-top:20px}
+body{
+background:#0b1d2a;
+color:white;
+text-align:center;
+font-family:Arial;
+margin:0;
+overflow:hidden;
+}
+
+canvas{
+background:#063248;
+margin-top:10px;
+border:3px solid #00eaff;
+}
+
+select,button{
+margin:5px;
+padding:6px;
+}
+
+#msg{
+font-size:28px;
+margin-top:10px;
+display:none;
+}
+
+.controls{
+position:fixed;
+bottom:20px;
+display:flex;
+flex-direction:column;
+align-items:center;
+}
+
+.controls.left{ left:20px; }
+.controls.right{ right:20px; }
+
+.controls .row{ display:flex; }
+
+.controls button{
+width:60px;
+height:60px;
+margin:4px;
+font-size:20px;
+border:none;
+border-radius:10px;
+background:#00eaff55;
+color:white;
+touch-action:none;
+user-select:none;
+-webkit-user-select:none;
+}
+
+.controls button:active{
+background:#00eaff;
+}
 </style>
 </head>
+
 <body>
 
-<h2>Cymbergaj</h2>
-
-<!-- 🔙 PRZYCISK POWROTU -->
-<button class="back" onclick="location.href='index.html'">⬅ Powrót do menu</button>
-<br><br>
-
-<button id="startBtn" onclick="start()">START</button>
-<span id="surrenderBtns"></span>
+<h2>Cymbergaj PRO Balanced</h2>
 
 Tryb:
-<select id="mode">
+<select id="mode" onchange="updateControls()">
+<option value="bot">1 vs Bot</option>
 <option value="pvp">1 vs 1</option>
-<option value="bot">vs BOT</option>
 </select>
 
-BOT:
+Poziom bota:
 <select id="bot">
-<option value="2">Łatwy</option>
-<option value="3">Średni</option>
-<option value="5">Trudny</option>
-<option value="7">Mistrz</option>
+<option value="1">Łatwy</option>
+<option value="2">Średni</option>
+<option value="3">Trudny</option>
 </select>
 
 Czas:
 <select id="time">
-<option value="60">1 min</option>
-<option value="120">2 min</option>
-<option value="180">3 min</option>
-<option value="300">5 min</option>
+<option value="60">60s</option>
+<option value="90">90s</option>
+<option value="120">120s</option>
 </select>
 
-<div>
-Runda: <span id="s1">0</span> - <span id="s2">0</span> |
-Czas: <span id="t">0</span>
-</div>
+<button onclick="start()">START</button>
 
-<canvas id="c" width="900" height="500"></canvas>
+<div>Gracz 1: <span id="s1">0</span> | Gracz 2: <span id="s2">0</span></div>
+<div>Czas: <span id="t">0</span></div>
 <div id="msg"></div>
 
+<canvas id="c" width="900" height="500"></canvas>
+
+<div class="controls left" id="controlsP1">
+<div class="row"><button data-key="ArrowUp">▲</button></div>
+<div class="row">
+<button data-key="ArrowLeft">◀</button>
+<button data-key="ArrowDown">▼</button>
+<button data-key="ArrowRight">▶</button>
+</div>
+</div>
+
+<div class="controls right" id="controlsP2">
+<div class="row"><button data-key="w">▲</button></div>
+<div class="row">
+<button data-key="a">◀</button>
+<button data-key="s">▼</button>
+<button data-key="d">▶</button>
+</div>
+</div>
+
 <script>
+
 let c=document.getElementById("c"),ctx=c.getContext("2d");
-let p1,p2,puck,keys={},lastPress={};
+
+let p1,p2,puck;
+let keys={},lastPress={};
 
 let s1=0,s2=0,time=0,run=false,last=0;
 let goalTop=180,goalBottom=320;
-let dashCooldownP1=0,dashCooldownP2=0;
-let countdownActive=false;
 
-let startBtn=document.getElementById("startBtn");
-let surrenderDiv=document.getElementById("surrenderBtns");
+let dashCooldownP1=0,dashCooldownP2=0;
+
 let mode=document.getElementById("mode");
 let botSel=document.getElementById("bot");
 let timeSel=document.getElementById("time");
@@ -73,218 +134,233 @@ let s2Span=document.getElementById("s2");
 let t=document.getElementById("t");
 let msg=document.getElementById("msg");
 
-/* INPUT */
-document.onkeydown=e=>{
-if(countdownActive||!run)return;
-if(!keys[e.key]){
-if(lastPress[e.key] && Date.now()-lastPress[e.key]<250) dash(e.key);
-lastPress[e.key]=Date.now();
+document.addEventListener("keydown",e=>{
+if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)){
+e.preventDefault();
 }
-keys[e.key]=1;
-};
-document.onkeyup=e=>keys[e.key]=0;
+if(!run)return;
+if(!keys[e.key]) handleDash(e.key);
+keys[e.key]=true;
+});
 
-/* START */
+document.addEventListener("keyup",e=>{
+keys[e.key]=false;
+});
+
+window.addEventListener("blur",()=>{ keys={}; });
+
+function handleDash(key){
+let now=Date.now();
+if(lastPress[key] && now-lastPress[key]<220){
+dash(key);
+}
+lastPress[key]=now;
+}
+
+function dash(key){
+if(key.includes("Arrow") && dashCooldownP1<=0){
+p1.dash=10;
+dashCooldownP1=25;
+}
+if("wasd".includes(key) && mode.value=="pvp" && dashCooldownP2<=0){
+p2.dash=10;
+dashCooldownP2=25;
+}
+}
+
 function start(){
 s1=s2=0;
 s1Span.innerText=0;
 s2Span.innerText=0;
 time=parseInt(timeSel.value);
-
-resetPlayersCenter();
-startCountdown();
-
+resetAll();
+updateControls();
 run=true;
-startBtn.disabled=true;
-mode.disabled=true;
-botSel.disabled=true;
-timeSel.disabled=true;
+last=0;
+requestAnimationFrame(loop);
+}
 
-if(mode.value=="bot"){
-surrenderDiv.innerHTML='<button onclick="surrender(1)">Poddaj się</button>';
+function resetAll(){
+p1={x:120,y:250,r:22,dash:0};
+p2={x:780,y:250,r:22,dash:0,vx:0,vy:0,targetX:780,targetY:250,decisionTimer:0};
+puck={x:450,y:250,vx:0,vy:0,r:12,friction:0.99};
+}
+
+////////////////////////////////////////////////////
+// 🔥 ZBALANSOWANY BOT
+////////////////////////////////////////////////////
+function stableBot(){
+
+let lvl=parseInt(botSel.value);
+
+// 🔥 ta sama maksymalna prędkość dla wszystkich
+let maxSpeed = 5.8;
+
+let reaction;
+let attackChance;
+
+// różnica tylko w inteligencji
+if(lvl==1){
+reaction = 0.03;
+attackChance = 0.35;
+}
+if(lvl==2){
+reaction = 0.045;
+attackChance = 0.5;
+}
+if(lvl==3){
+reaction = 0.06;
+attackChance = 0.7;
+}
+
+// czy piłka leci w stronę bramki bota
+let danger = (puck.vx>0 && puck.x>520);
+
+p2.decisionTimer--;
+if(p2.decisionTimer<=0){
+
+if(danger){
+
+// obrona ALE nie w jednej linii
+p2.targetX = 760 + Math.random()*20;
+p2.targetY = puck.y + (Math.random()*40-20);
+
+// jeśli piłka wolna → wyjdź do przodu
+if(Math.abs(puck.vx)<2){
+p2.targetX = 720;
+}
+
 }else{
-surrenderDiv.innerHTML=
-'<button onclick="surrender(1)">P1 poddaj</button>'+
-'<button onclick="surrender(2)">P2 poddaj</button>';
+
+// ATAK zamiast czekania
+if(Math.random()<attackChance){
+p2.targetX = puck.x-15;
+p2.targetY = puck.y + (Math.random()*20-10);
+}else{
+// lekki ruch przód-tył zamiast stania
+p2.targetX = 760 + Math.sin(Date.now()*0.002)*20;
+p2.targetY = 250;
 }
 
-requestAnimationFrame(loop);
 }
 
-function endGame(){
-startBtn.disabled=false;
-mode.disabled=false;
-botSel.disabled=false;
-timeSel.disabled=false;
-surrenderDiv.innerHTML="";
+// czas decyzji
+p2.decisionTimer = 15;
 }
 
-function surrender(player){
-if(!run)return;
-run=false;
-msg.style.display="block";
-msg.innerText="Gracz "+player+" się poddał!";
-endGame();
+let dx = p2.targetX - p2.x;
+let dy = p2.targetY - p2.y;
+
+// płynny ruch
+p2.vx = p2.vx*0.7 + dx*reaction;
+p2.vy = p2.vy*0.7 + dy*reaction;
+
+// 🔥 limit prędkości identyczny na każdym poziomie
+let len = Math.hypot(p2.vx,p2.vy);
+if(len>maxSpeed){
+p2.vx = p2.vx/len*maxSpeed;
+p2.vy = p2.vy/len*maxSpeed;
 }
 
-/* RESET */
-function resetPlayersCenter(){
-p1={x:120,y:250,r:22,d:0};
-p2={x:780,y:250,r:22,d:0};
-puck={x:450,y:250,vx:0,vy:0,r:12,wait:1};
+p2.x += p2.vx;
+p2.y += p2.vy;
 }
 
-function resetAfterGoal(loser){
-p1={x:120,y:250,r:22,d:0};
-p2={x:780,y:250,r:22,d:0};
+////////////////////////////////////////////////////
 
-if(loser==1) puck={x:160,y:250,vx:0,vy:0,r:12,wait:1};
-else puck={x:740,y:250,vx:0,vy:0,r:12,wait:1};
-}
-
-/* COUNTDOWN */
-function startCountdown(){
-countdownActive=true;
-let count=3;
-msg.style.display="block";
-msg.innerText=count;
-
-let i=setInterval(()=>{
-count--;
-if(count>0) msg.innerText=count;
-else if(count==0) msg.innerText="START!";
-else{
-clearInterval(i);
-msg.style.display="none";
-countdownActive=false;
-}
-},1000);
-}
-
-/* DASH */
-function dash(k){
-if(k.includes("Arrow") && dashCooldownP1<=0){
-p1.d=28; dashCooldownP1=30;
-}
-if("wasd".includes(k) && mode.value=="pvp" && dashCooldownP2<=0){
-p2.d=28; dashCooldownP2=30;
-}
-}
-
-/* LOOP */
-function loop(ts){
-if(!run)return;
-
-let dt=(ts-last)/1000;
-last=ts;
-time-=dt;
-
-if(time<=0){
-time=0;
-run=false;
-msg.style.display="block";
-
-if(s1>s2) msg.innerText="WYGRYWA GRACZ 1";
-else if(s2>s1) msg.innerText="WYGRYWA GRACZ 2";
-else msg.innerText="REMIS";
-
-endGame();
-return;
-}
-
-if(dashCooldownP1>0)dashCooldownP1--;
-if(dashCooldownP2>0)dashCooldownP2--;
-
-move();
-draw();
-t.innerText=Math.ceil(time);
-
-requestAnimationFrame(loop);
-}
-
-/* MOVE */
 function move(){
-if(countdownActive)return;
 
-let sp=5;
-if(p1.d>0)p1.d--;
-if(p2.d>0)p2.d--;
+let baseSpeed=5.8;
 
-let s1d=sp+(p1.d?10:0);
-let s2d=sp+(p2.d?10:0);
+if(p1.dash>0)p1.dash--;
+if(p2.dash>0)p2.dash--;
 
-if(keys.ArrowUp)p1.y-=s1d;
-if(keys.ArrowDown)p1.y+=s1d;
-if(keys.ArrowLeft)p1.x-=s1d;
-if(keys.ArrowRight)p1.x+=s1d;
+let speed1=baseSpeed+(p1.dash?6:0);
+let speed2=baseSpeed+(p2.dash?6:0);
+
+if(keys.ArrowUp)p1.y-=speed1;
+if(keys.ArrowDown)p1.y+=speed1;
+if(keys.ArrowLeft)p1.x-=speed1;
+if(keys.ArrowRight)p1.x+=speed1;
 
 if(mode.value=="pvp"){
-if(keys.w)p2.y-=s2d;
-if(keys.s)p2.y+=s2d;
-if(keys.a)p2.x-=s2d;
-if(keys.d)p2.x+=s2d;
-}else botMove();
+if(keys.w)p2.y-=speed2;
+if(keys.s)p2.y+=speed2;
+if(keys.a)p2.x-=speed2;
+if(keys.d)p2.x+=speed2;
+}else stableBot();
 
 bounds();
+collisions();
+}
 
-if(puck.wait){
-if(dist(p1,puck)<35||dist(p2,puck)<35)puck.wait=0;
-return;
+////////////////////////////////////////////////////
+function collisions(){
+
+let baseHit=7;
+let dashMulti=2;
+
+let dx=puck.x-p1.x;
+let dy=puck.y-p1.y;
+let d=Math.hypot(dx,dy);
+
+if(d<p1.r+puck.r){
+let angle=Math.atan2(dy,dx);
+if(p1.dash>0){
+puck.vx=Math.cos(angle)*baseHit*dashMulti;
+puck.vy=Math.sin(angle)*baseHit*dashMulti;
+puck.friction=0.995;
+}else{
+puck.vx=Math.cos(angle)*baseHit;
+puck.vy=Math.sin(angle)*baseHit;
+puck.friction=0.99;
+}
+}
+
+dx=puck.x-p2.x;
+dy=puck.y-p2.y;
+d=Math.hypot(dx,dy);
+
+if(d<p2.r+puck.r){
+let angle=Math.atan2(dy,dx);
+if(p2.dash>0){
+puck.vx=Math.cos(angle)*baseHit*dashMulti;
+puck.vy=Math.sin(angle)*baseHit*dashMulti;
+puck.friction=0.995;
+}else{
+puck.vx=Math.cos(angle)*baseHit;
+puck.vy=Math.sin(angle)*baseHit;
+puck.friction=0.99;
+}
 }
 
 puck.x+=puck.vx;
 puck.y+=puck.vy;
 
-if(puck.y<12){puck.y=12;puck.vy=Math.abs(puck.vy);}
-if(puck.y>488){puck.y=488;puck.vy=-Math.abs(puck.vy);}
+puck.vx*=puck.friction;
+puck.vy*=puck.friction;
 
-if(puck.x<12){
-if(puck.y>goalTop&&puck.y<goalBottom) score(2);
-else{puck.x=12;puck.vx=Math.abs(puck.vx);}
-}
+if(puck.y-puck.r<0){ puck.y=puck.r; puck.vy*=-1; }
+if(puck.y+puck.r>500){ puck.y=500-puck.r; puck.vy*=-1; }
 
-if(puck.x>888){
-if(puck.y>goalTop&&puck.y<goalBottom) score(1);
-else{puck.x=888;puck.vx=-Math.abs(puck.vx);}
-}
-
-collide(p1);
-collide(p2);
-}
-
-function botMove(){
-let lvl=parseInt(botSel.value);
-let speed=3+lvl*0.7;
-if(puck.wait){moveTo(520,250,speed);return;}
-let fx=puck.x+puck.vx*(10+lvl*2);
-let fy=puck.y+puck.vy*(10+lvl*2);
-let tx=puck.x>650?760:fx-30;
-let ty=fy;
-tx=Math.max(480,Math.min(870,tx));
-ty=Math.max(40,Math.min(460,ty));
-moveTo(tx,ty,speed);
-}
-
-function collide(p){
-let dx=puck.x-p.x;
-let dy=puck.y-p.y;
-let d=Math.hypot(dx,dy);
-if(d<p.r+puck.r){
-let angle=Math.atan2(dy,dx);
-let power=8;
-if(p==p1 && p.d>15) power=18;
-puck.vx=Math.cos(angle)*power;
-puck.vy=Math.sin(angle)*power;
+if(puck.x-puck.r<0){
+if(puck.y>goalTop&&puck.y<goalBottom){
+s2++; s2Span.innerText=s2; resetAll();
+}else{
+puck.x=puck.r; puck.vx*=-1;
 }
 }
 
-function moveTo(x,y,sp){
-if(p2.x<x)p2.x+=sp;
-if(p2.x>x)p2.x-=sp;
-if(p2.y<y)p2.y+=sp;
-if(p2.y>y)p2.y-=sp;
+if(puck.x+puck.r>900){
+if(puck.y>goalTop&&puck.y<goalBottom){
+s1++; s1Span.innerText=s1; resetAll();
+}else{
+puck.x=900-puck.r; puck.vx*=-1;
+}
+}
 }
 
+////////////////////////////////////////////////////
 function bounds(){
 p1.x=Math.max(22,Math.min(440,p1.x));
 p2.x=Math.max(470,Math.min(878,p2.x));
@@ -292,39 +368,73 @@ p1.y=Math.max(22,Math.min(478,p1.y));
 p2.y=Math.max(22,Math.min(478,p2.y));
 }
 
-function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
-
-function score(player){
-msg.style.display="block";
-msg.innerText="PUNKT dla gracza "+player;
-setTimeout(()=>msg.style.display="none",1200);
-
-if(player==1){s1++;resetAfterGoal(2);}
-else{s2++;resetAfterGoal(1);}
-
-s1Span.innerText=s1;
-s2Span.innerText=s2;
-}
-
 function draw(){
 ctx.clearRect(0,0,900,500);
-ctx.beginPath();ctx.moveTo(450,0);ctx.lineTo(450,500);
-ctx.strokeStyle="#00eaff";ctx.lineWidth=3;ctx.stroke();
-ctx.beginPath();ctx.arc(450,250,60,0,Math.PI*2);ctx.stroke();
+
+ctx.beginPath();
+ctx.moveTo(450,0);
+ctx.lineTo(450,500);
+ctx.strokeStyle="#00eaff";
+ctx.lineWidth=3;
+ctx.stroke();
+
 ctx.fillStyle="#fff";
-ctx.fillRect(0,goalTop,8,goalBottom-goalTop);
-ctx.fillRect(892,goalTop,8,goalBottom-goalTop);
+ctx.fillRect(0,goalTop,10,goalBottom-goalTop);
+ctx.fillRect(890,goalTop,10,goalBottom-goalTop);
+
 circle(p1,"#0f8");
 circle(p2,"#f06");
 circle(puck,"#fff");
 }
+
 function circle(o,c){
 ctx.beginPath();
-ctx.arc(o.x,o.y,o.r,0,7);
+ctx.arc(o.x,o.y,o.r,0,Math.PI*2);
 ctx.fillStyle=c;
 ctx.fill();
 }
-</script>
 
+function loop(ts){
+if(!run)return;
+let dt=(ts-last)/1000;
+last=ts;
+time-=dt;
+if(time<=0){
+time=0;
+run=false;
+msg.style.display="block";
+msg.innerText=s1>s2?"WYGRYWA GRACZ 1":s2>s1?"WYGRYWA GRACZ 2":"REMIS";
+return;
+}
+move();
+draw();
+t.innerText=Math.ceil(time);
+if(dashCooldownP1>0)dashCooldownP1--;
+if(dashCooldownP2>0)dashCooldownP2--;
+requestAnimationFrame(loop);
+}
+
+document.querySelectorAll(".controls button").forEach(btn=>{
+let key=btn.dataset.key;
+function press(e){ e.preventDefault(); handleDash(key); keys[key]=true; }
+function release(e){ e.preventDefault(); keys[key]=false; }
+btn.addEventListener("touchstart",press,{passive:false});
+btn.addEventListener("touchend",release);
+btn.addEventListener("touchcancel",release);
+btn.addEventListener("mousedown",press);
+btn.addEventListener("mouseup",release);
+btn.addEventListener("mouseleave",release);
+btn.addEventListener("contextmenu",e=>e.preventDefault());
+});
+
+function updateControls(){
+if(mode.value=="bot"){
+document.getElementById("controlsP2").style.display="none";
+}else{
+document.getElementById("controlsP2").style.display="flex";
+}
+}
+
+</script>
 </body>
 </html>
