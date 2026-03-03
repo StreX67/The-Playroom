@@ -5,13 +5,7 @@
 <title>Kasyno P.Z</title>
 
 <style>
-body{
-    margin:0;
-    font-family:Arial;
-    background:#1b1b1b;
-    color:white;
-    text-align:center;
-}
+body{margin:0;font-family:Arial;background:#1b1b1b;color:white;text-align:center;}
 .topbar{background:#222;padding:15px;}
 .menu a{
     display:inline-block;
@@ -32,20 +26,22 @@ body{
     justify-content:center;
     align-items:center;
     flex-direction:column;
-    color:white;
     z-index:999;
 }
 .loginBox input{padding:10px;font-size:18px;margin:10px;}
 .loginBox button{padding:10px 20px;font-size:18px;cursor:pointer;}
+.ranking{margin-top:20px;padding:15px;background:#111;}
+.ranking div{padding:6px;border-bottom:1px solid #333;}
 </style>
 </head>
 
 <body>
 
 <div id="loginBox" class="loginBox">
-    <h2>Podaj swój nick 🎮</h2>
-    <input type="text" id="nicknameInput" placeholder="Twój nick">
-    <button onclick="saveNick()">Graj</button>
+    <h2>Logowanie 🎮</h2>
+    <input type="text" id="nicknameInput" placeholder="Nick">
+    <input type="password" id="passwordInput" placeholder="Hasło (max 8 znaków)">
+    <button id="loginBtn">Zaloguj / Zarejestruj</button>
 </div>
 
 <div class="topbar">
@@ -55,14 +51,13 @@ body{
 <div class="menu">
     <a href="index2.html">🎯 Ruletka</a>
     <a href="index6.html">🎴 Blackjack</a> 
-   
     <a href="index5.html">🪙 Moneta</a>
     <a href="index8.html">💣 Miny</a>
     <a href="index9.html">🐎 Wyścigi</a>
     <a href="index11.html">🎰 Case Opener</a>
     <a href="index12.html">🎯 Dart</a>
     <a href="index13.html">🏒 Cymbergaj</a>
-       <a href="index20.html">Kółko i Krzyżyk</a>
+    <a href="index20.html">Kółko i Krzyżyk</a>
 </div>
 
 <div class="stats">
@@ -71,12 +66,18 @@ body{
     <p id="playerMoney"></p>
 </div>
 
+<div class="ranking">
+    <h2>🏆 Ranking TOP 20 (aktywni ≤7 dni)</h2>
+    <div id="rankingList"></div>
+</div>
+
 <br>
 <button onclick="resetGame()">🔄 Reset gry</button>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, set, get, child, update }
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 /* ===== FIREBASE ===== */
 const firebaseConfig = {
@@ -92,64 +93,148 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-let nick = localStorage.getItem("casinoNick");
+let currentUser = null;
 
-if(nick){
-    loadPlayer(nick);
+/* ===== PRZYCISK ===== */
+document.getElementById("loginBtn").addEventListener("click", loginUser);
+
+/* ===== AUTO LOGIN ===== */
+let savedNick = localStorage.getItem("casinoNick");
+let savedPass = localStorage.getItem("casinoPass");
+
+if(savedNick && savedPass){
+    login(savedNick, savedPass, true);
 }
 
-/* ===== ZAPIS NICKU ===== */
-window.saveNick = function(){
-    let n = document.getElementById("nicknameInput").value.trim();
-    if(n.length < 2){
-        alert("Podaj nick!");
+/* ===== LOGOWANIE ===== */
+function loginUser(){
+    let nick = document.getElementById("nicknameInput").value.trim();
+    let pass = document.getElementById("passwordInput").value.trim();
+
+    if(!nick || nick.length < 2){
+        alert("Podaj poprawny nick!");
         return;
     }
-    localStorage.setItem("casinoNick", n);
-    loadPlayer(n);
+
+    if(!pass || pass.length > 8){
+        alert("Hasło max 8 znaków!");
+        return;
+    }
+
+    login(nick, pass, false);
 }
 
-/* ===== WCZYTANIE GRACZA ===== */
-function loadPlayer(nick){
-    document.getElementById("loginBox").style.display="none";
-    const playerRef = ref(db, "players/" + nick);
+function login(nick, pass, silent){
 
-    get(playerRef).then((snapshot)=>{
-        let money;
+    const playerRef = ref(db, "players/" + nick);
+    let now = Date.now();
+
+    get(playerRef).then(snapshot=>{
 
         if(snapshot.exists()){
-            money = snapshot.val().money;
+
+            let data = snapshot.val();
+
+            if(data.pass !== pass){
+                if(!silent) alert("Złe hasło!");
+                return;
+            }
+
+            update(playerRef,{ lastLogin: now });
+
+            currentUser = nick;
+
+            localStorage.setItem("casinoNick", nick);
+            localStorage.setItem("casinoPass", pass);
+            localStorage.setItem("saldo", data.money);
+
+            document.getElementById("loginBox").style.display="none";
+            showStats(nick, data.money);
+
         }else{
-            money = 1000;
-            set(playerRef,{money:1000});
+
+            set(playerRef,{
+                money:1000,
+                pass:pass,
+                lastLogin: now
+            });
+
+            currentUser = nick;
+
+            localStorage.setItem("casinoNick", nick);
+            localStorage.setItem("casinoPass", pass);
+            localStorage.setItem("saldo", 1000);
+
+            document.getElementById("loginBox").style.display="none";
+            showStats(nick, 1000);
         }
 
-        // zapis do localStorage jako kopia
-        localStorage.setItem("saldo", money);
-
-        showStats(nick, money);
+        loadRanking();
+    }).catch(error=>{
+        console.error("Błąd logowania:", error);
+        alert("Błąd połączenia z bazą!");
     });
 }
 
-/* ===== WYŚWIETLANIE ===== */
+/* ===== STATYSTYKI ===== */
 function showStats(nick,money){
     document.getElementById("playerNick").innerText="👤 Nick: "+nick;
     document.getElementById("playerMoney").innerText="💰 Konto: "+money+" zł";
 }
 
-/* ===== RESET ===== */
-window.resetGame = function(){
-    if(confirm("Na pewno zresetować konto?")){
-        let nick = localStorage.getItem("casinoNick");
+/* ===== RANKING ===== */
+function loadRanking(){
 
-        if(nick){
-            set(ref(db,"players/"+nick),{money:1000});
+    get(child(ref(db),"players")).then(snapshot=>{
+
+        if(!snapshot.exists()){
+            document.getElementById("rankingList").innerHTML="Brak graczy";
+            return;
         }
 
+        let players=[];
+        let now=Date.now();
+        let sevenDays=7*24*60*60*1000;
+
+        snapshot.forEach(child=>{
+
+            let data=child.val();
+            if(!data.lastLogin) return;
+
+            if(now - data.lastLogin <= sevenDays){
+                players.push({
+                    nick:child.key,
+                    money:data.money
+                });
+            }
+        });
+
+        players.sort((a,b)=>b.money-a.money);
+
+        let html="";
+        players.slice(0,20).forEach((p,i)=>{
+            html+=`<div>${i+1}. ${p.nick} - ${p.money} zł</div>`;
+        });
+
+        document.getElementById("rankingList").innerHTML=html;
+    });
+}
+
+/* ===== RESET ===== */
+window.resetGame=function(){
+    if(confirm("Na pewno zresetować konto?")){
+        let nick=localStorage.getItem("casinoNick");
+        if(nick){
+            update(ref(db,"players/"+nick),{money:1000});
+        }
         localStorage.clear();
         location.reload();
     }
 }
+
+/* ===== ŁADUJ RANKING NA START ===== */
+loadRanking();
+
 </script>
 
 </body>
