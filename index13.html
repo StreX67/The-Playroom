@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
-<title>Cymbergaj PRO Balanced</title>
+<title>Cymbergaj PRO</title>
 
 <style>
 body{
@@ -67,6 +67,7 @@ background:#00eaff;
 <body>
 
 <h2>Cymbergaj PRO Balanced</h2>
+<button onclick="location.href='menu.html'">⬅ Powrót do menu</button>
 
 Tryb:
 <select id="mode" onchange="updateControls()">
@@ -83,12 +84,12 @@ Poziom bota:
 
 Czas:
 <select id="time">
-<option value="60">60s</option>
-<option value="90">90s</option>
-<option value="120">120s</option>
+<option value="60">1 min</option>
+<option value="180">3 min</option>
+<option value="300">5 min</option>
 </select>
 
-<button onclick="start()">START</button>
+<button id="startBtn" onclick="start()">START</button>
 
 <div>Gracz 1: <span id="s1">0</span> | Gracz 2: <span id="s2">0</span></div>
 <div>Czas: <span id="t">0</span></div>
@@ -169,15 +170,53 @@ dashCooldownP2=25;
 }
 
 function start(){
-s1=s2=0;
+
+run=false;
+
+s1=0;
+s2=0;
+
 s1Span.innerText=0;
 s2Span.innerText=0;
-time=parseInt(timeSel.value);
+
 resetAll();
-updateControls();
+
+document.getElementById("startBtn").disabled=true;
+mode.disabled=true;
+botSel.disabled=true;
+timeSel.disabled=true;
+
+time=parseInt(timeSel.value);
+
+let count=3;
+
+msg.style.display="block";
+msg.innerText=count;
+
+let countdown=setInterval(()=>{
+
+count--;
+
+if(count>0){
+msg.innerText=count;
+}
+else if(count===0){
+msg.innerText="START!";
+}
+else{
+
+clearInterval(countdown);
+
+msg.style.display="none";
 run=true;
 last=0;
 requestAnimationFrame(loop);
+
+}
+
+},1000);
+
+updateControls();
 }
 
 function resetAll(){
@@ -186,20 +225,15 @@ p2={x:780,y:250,r:22,dash:0,vx:0,vy:0,targetX:780,targetY:250,decisionTimer:0};
 puck={x:450,y:250,vx:0,vy:0,r:12,friction:0.99};
 }
 
-////////////////////////////////////////////////////
-// 🔥 ZBALANSOWANY BOT
-////////////////////////////////////////////////////
 function stableBot(){
 
 let lvl=parseInt(botSel.value);
 
-// 🔥 ta sama maksymalna prędkość dla wszystkich
 let maxSpeed = 5.8;
 
 let reaction;
 let attackChance;
 
-// różnica tylko w inteligencji
 if(lvl==1){
 reaction = 0.03;
 attackChance = 0.35;
@@ -213,7 +247,6 @@ reaction = 0.06;
 attackChance = 0.7;
 }
 
-// czy piłka leci w stronę bramki bota
 let danger = (puck.vx>0 && puck.x>520);
 
 p2.decisionTimer--;
@@ -221,41 +254,34 @@ if(p2.decisionTimer<=0){
 
 if(danger){
 
-// obrona ALE nie w jednej linii
 p2.targetX = 760 + Math.random()*20;
 p2.targetY = puck.y + (Math.random()*40-20);
 
-// jeśli piłka wolna → wyjdź do przodu
 if(Math.abs(puck.vx)<2){
 p2.targetX = 720;
 }
 
 }else{
 
-// ATAK zamiast czekania
 if(Math.random()<attackChance){
 p2.targetX = puck.x-15;
 p2.targetY = puck.y + (Math.random()*20-10);
 }else{
-// lekki ruch przód-tył zamiast stania
 p2.targetX = 760 + Math.sin(Date.now()*0.002)*20;
 p2.targetY = 250;
 }
 
 }
 
-// czas decyzji
 p2.decisionTimer = 15;
 }
 
 let dx = p2.targetX - p2.x;
 let dy = p2.targetY - p2.y;
 
-// płynny ruch
 p2.vx = p2.vx*0.7 + dx*reaction;
 p2.vy = p2.vy*0.7 + dy*reaction;
 
-// 🔥 limit prędkości identyczny na każdym poziomie
 let len = Math.hypot(p2.vx,p2.vy);
 if(len>maxSpeed){
 p2.vx = p2.vx/len*maxSpeed;
@@ -265,8 +291,6 @@ p2.vy = p2.vy/len*maxSpeed;
 p2.x += p2.vx;
 p2.y += p2.vy;
 }
-
-////////////////////////////////////////////////////
 
 function move(){
 
@@ -294,7 +318,6 @@ bounds();
 collisions();
 }
 
-////////////////////////////////////////////////////
 function collisions(){
 
 let baseHit=7;
@@ -360,7 +383,6 @@ puck.x=900-puck.r; puck.vx*=-1;
 }
 }
 
-////////////////////////////////////////////////////
 function bounds(){
 p1.x=Math.max(22,Math.min(440,p1.x));
 p2.x=Math.max(470,Math.min(878,p2.x));
@@ -399,25 +421,47 @@ if(!run)return;
 let dt=(ts-last)/1000;
 last=ts;
 time-=dt;
+
 if(time<=0){
 time=0;
 run=false;
+
 msg.style.display="block";
 msg.innerText=s1>s2?"WYGRYWA GRACZ 1":s2>s1?"WYGRYWA GRACZ 2":"REMIS";
+
+document.getElementById("startBtn").disabled=false;
+mode.disabled=false;
+botSel.disabled=false;
+timeSel.disabled=false;
+
 return;
 }
+
 move();
 draw();
+
 t.innerText=Math.ceil(time);
+
 if(dashCooldownP1>0)dashCooldownP1--;
 if(dashCooldownP2>0)dashCooldownP2--;
+
 requestAnimationFrame(loop);
 }
 
 document.querySelectorAll(".controls button").forEach(btn=>{
 let key=btn.dataset.key;
-function press(e){ e.preventDefault(); handleDash(key); keys[key]=true; }
-function release(e){ e.preventDefault(); keys[key]=false; }
+
+function press(e){
+e.preventDefault();
+handleDash(key);
+keys[key]=true;
+}
+
+function release(e){
+e.preventDefault();
+keys[key]=false;
+}
+
 btn.addEventListener("touchstart",press,{passive:false});
 btn.addEventListener("touchend",release);
 btn.addEventListener("touchcancel",release);
