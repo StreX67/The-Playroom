@@ -55,7 +55,6 @@ background:#00eaff55;
 color:white;
 touch-action:none;
 user-select:none;
--webkit-user-select:none;
 }
 
 .controls button:active{
@@ -67,7 +66,7 @@ background:#00eaff;
 <body>
 
 <h2>Cymbergaj PRO Balanced</h2>
-<button onclick="location.href='index.html'">⬅ Powrót do menu</button>
+<button onclick="location.href='menu.html'">⬅ Powrót do menu</button>
 
 Tryb:
 <select id="mode" onchange="updateControls()">
@@ -90,6 +89,8 @@ Czas:
 </select>
 
 <button id="startBtn" onclick="start()">START</button>
+
+<button onclick="findOnline()">🌐 SZUKAJ GRACZA ONLINE</button>
 
 <div>Gracz 1: <span id="s1">0</span> | Gracz 2: <span id="s2">0</span></div>
 <div>Czas: <span id="t">0</span></div>
@@ -115,7 +116,59 @@ Czas:
 </div>
 </div>
 
-<script>
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+
+const firebaseConfig = {
+apiKey: "AIzaSyCoelr0ztFBXhZKR2N0EGfa2xjSLlaDIY4",
+authDomain: "cymbergaj-online-c8e92.firebaseapp.com",
+databaseURL: "https://cymbergaj-online-c8e92-default-rtdb.europe-west1.firebasedatabase.app",
+projectId: "cymbergaj-online-c8e92",
+storageBucket: "cymbergaj-online-c8e92.firebasestorage.app",
+messagingSenderId: "992835282246",
+appId: "1:992835282246:web:86f073c238956694a7f147"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+let playerId=Math.random().toString(36).substr(2,9);
+let room=null;
+
+function findOnline(){
+
+msg.style.display="block";
+msg.innerText="Szukam gracza...";
+
+const waiting=ref(db,"waiting");
+
+onValue(waiting,(snap)=>{
+
+let data=snap.val();
+
+if(data && data!==playerId){
+
+room="room_"+Date.now();
+
+set(ref(db,"rooms/"+room+"/p1"),data);
+set(ref(db,"rooms/"+room+"/p2"),playerId);
+
+remove(waiting);
+
+msg.innerText="Gracz znaleziony!";
+start();
+
+}else{
+
+set(waiting,playerId);
+
+}
+
+});
+
+}
 
 let c=document.getElementById("c"),ctx=c.getContext("2d");
 
@@ -257,17 +310,13 @@ if(danger){
 p2.targetX = 760 + Math.random()*20;
 p2.targetY = puck.y + (Math.random()*40-20);
 
-if(Math.abs(puck.vx)<2){
-p2.targetX = 720;
-}
-
 }else{
 
 if(Math.random()<attackChance){
 p2.targetX = puck.x-15;
 p2.targetY = puck.y + (Math.random()*20-10);
 }else{
-p2.targetX = 760 + Math.sin(Date.now()*0.002)*20;
+p2.targetX = 760;
 p2.targetY = 250;
 }
 
@@ -329,15 +378,8 @@ let d=Math.hypot(dx,dy);
 
 if(d<p1.r+puck.r){
 let angle=Math.atan2(dy,dx);
-if(p1.dash>0){
-puck.vx=Math.cos(angle)*baseHit*dashMulti;
-puck.vy=Math.sin(angle)*baseHit*dashMulti;
-puck.friction=0.995;
-}else{
-puck.vx=Math.cos(angle)*baseHit;
-puck.vy=Math.sin(angle)*baseHit;
-puck.friction=0.99;
-}
+puck.vx=Math.cos(angle)*baseHit*(p1.dash?dashMulti:1);
+puck.vy=Math.sin(angle)*baseHit*(p1.dash?dashMulti:1);
 }
 
 dx=puck.x-p2.x;
@@ -346,15 +388,8 @@ d=Math.hypot(dx,dy);
 
 if(d<p2.r+puck.r){
 let angle=Math.atan2(dy,dx);
-if(p2.dash>0){
-puck.vx=Math.cos(angle)*baseHit*dashMulti;
-puck.vy=Math.sin(angle)*baseHit*dashMulti;
-puck.friction=0.995;
-}else{
-puck.vx=Math.cos(angle)*baseHit;
-puck.vy=Math.sin(angle)*baseHit;
-puck.friction=0.99;
-}
+puck.vx=Math.cos(angle)*baseHit*(p2.dash?dashMulti:1);
+puck.vy=Math.sin(angle)*baseHit*(p2.dash?dashMulti:1);
 }
 
 puck.x+=puck.vx;
@@ -418,6 +453,7 @@ ctx.fill();
 
 function loop(ts){
 if(!run)return;
+
 let dt=(ts-last)/1000;
 last=ts;
 time-=dt;
@@ -468,7 +504,6 @@ btn.addEventListener("touchcancel",release);
 btn.addEventListener("mousedown",press);
 btn.addEventListener("mouseup",release);
 btn.addEventListener("mouseleave",release);
-btn.addEventListener("contextmenu",e=>e.preventDefault());
 });
 
 function updateControls(){
@@ -478,8 +513,10 @@ document.getElementById("controlsP2").style.display="none";
 document.getElementById("controlsP2").style.display="flex";
 }
 }
+window.start = start;
+window.updateControls = updateControls;
+window.findOnline = findOnline;
 
 </script>
 </body>
 </html>
-
