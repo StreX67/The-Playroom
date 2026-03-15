@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>GO UP</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{margin:0;background:#07070f;color:white;font-family:Arial;text-align:center;overflow:hidden}
+canvas{display:block;margin:auto}
+#controls{position:fixed;bottom:70px;width:100%;display:flex;justify-content:center;gap:6px}
+button{width:55px;height:55px;font-size:18px;border:none;border-radius:10px;background:#404055;color:white}
+#cooldowns{position:fixed;bottom:0;width:100%;display:flex;justify-content:center;gap:6px;background:#111;padding:6px}
+.cool{width:70px;height:10px;background:#333;border-radius:6px;overflow:hidden}
+.bar{height:100%;background:#00ffff;width:0%}
+#shop{position:fixed;top:10px;right:10px;background:#1a1a26;padding:10px;border-radius:10px;text-align:right}
+#legendBtn{position:fixed;top:10px;left:10px;width:auto;padding:6px 10px}
+#legend{position:fixed;top:50px;left:10px;background:#1a1a26;padding:10px;border-radius:10px;text-align:left;display:none;max-width:220px;font-size:12px}
+#topBtn{position:fixed;top:10px;left:70px;width:auto;padding:6px 10px}
+#top{position:fixed;top:50px;left:70px;background:#1a1a26;padding:10px;border-radius:10px;text-align:left;display:none;max-width:220px;font-size:12px}
+button{
+touch-action:none;
+user-select:none;
+}
+</style>
+</head>
+
+<body>
+<h2>GO UP</h2>
+<div>Best: <span id="best">0</span></div>
+<canvas id="game" width="400" height="600"></canvas>
+
+<button id="legendBtn">?</button>
+<button id="topBtn">TOP10</button>
+
+<div id="legend">
+<b>Legenda platform</b><br>
+⬜ Biała — zwykła<br>
+🟥 Czerwona — zabija (shield chroni)<br>
+🌌 Fiolet — teleport w górę<br>
+💨 Turkus — boost skoku<br>
+🌙 Jasny fiolet — niski skok (1 raz lowG)<br>
+❄ Niebieska — lód (poślizg)<br>
+🌋 Pomarańcz — mocne wybicie<br>
+🌊 Błękit — wolne opadanie<br>
+🌲 Zielona — wysoki skok<br>
+</div>
+
+<div id="top">
+<b>TOP 10 graczy</b>
+<ol id="topList"></ol>
+</div>
+
+<div id="controls">
+<button id="left">⬅</button>
+<button id="right">➡</button>
+<button id="jump">↑</button>
+<button id="down">↓</button>
+<button id="magnet">Z</button>
+<button id="speed">X</button>
+<button id="super">C</button>
+</div>
+
+<div id="cooldowns">
+<div class="cool"><div id="cdDouble" class="bar"></div></div>
+<div class="cool"><div id="cdShield" class="bar"></div></div>
+<div class="cool"><div id="cdMagnet" class="bar"></div></div>
+<div class="cool"><div id="cdSpeed" class="bar"></div></div>
+<div class="cool"><div id="cdSuper" class="bar"></div></div>
+</div>
+
+<div id="shop">
+Coins: <span id="coinsDisplay"></span><br>
+<button id="buyMagnet">Magnet (5)</button>
+<button id="buyShield">Shield (5)</button>
+<button id="buyDouble">Double Jump (5)</button>
+<button id="buySpeed">Speed (5)</button>
+<button id="buyJump">Super Jump (5)</button>
+</div>
+
+<script type="module">
+
+// 🔥 FIREBASE
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "APIKEY",
+  authDomain: "kasynopz.firebaseapp.com",
+  databaseURL: "https://kasynopz-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "kasynopz",
+  storageBucket: "kasynopz.firebasestorage.app",
+  messagingSenderId: "816405578915",
+  appId: "APPID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+function saveScore(best, coins, upgrades){
+  const nick = localStorage.getItem("casinoNick");
+  if(!nick) return;
+  set(ref(db, "players/"+nick), {
+    best: best,
+    coins: coins,
+    upgrades: upgrades
+  });
+}
+
+async function loadTop10(){
+  const snap = await get(child(ref(db), "players"));
+  if(!snap.exists()) return;
+  const data = snap.val();
+  const arr = Object.entries(data).map(([nick,v])=>({nick, best:v.best||0}));
+  arr.sort((a,b)=>b.best-a.best);
+  const top = arr.slice(0,10);
+  const ol = document.getElementById("topList");
+  ol.innerHTML="";
+  top.forEach(p=>{
+    const li=document.createElement("li");
+    li.textContent = p.nick+" — "+p.best;
+    ol.appendChild(li);
+  });
+}
+
+// 🎮 GAME
+const canvas=document.getElementById("game")
+const ctx=canvas.getContext("2d")
+
+let player,platforms=[],coins=[]
+let score=0
+
+let best=parseInt(localStorage.getItem("best"))||0
+document.getElementById("best").innerText=best
+
+let wallet=parseInt(localStorage.getItem("coins"))||0
+document.getElementById("coinsDisplay").innerText=wallet
+
+let upgrades=JSON.parse(localStorage.getItem("upgrades")||"{}")
+let magnetOwned=upgrades.magnet||false
+let shieldOwned=upgrades.shield||false
+let doubleOwned=upgrades.double||false
+let speedOwned=upgrades.speed||false
+let jumpOwned=upgrades.jump||false
+
+let magnetActive=false
+let speedActive=false
+let shieldActive=false
+let blueShield=false
+
+let gravity=0.45
+let lowGNextJump=false
+let jump=-14
+let speed=6
+let keys={}
+let canDouble=true
+
+// 🔥 NOWE MECHANIKI
+let lastA=0
+let lastD=0
+let lastW=0
+let dashCooldown=0
+let doubleCooldown=0
+
+const cooldown={}
+const cdTime={double:10000,shield:40000,magnet:25000,speed:30000,super:15000}
+function setCD(p){cooldown[p]=Date.now()+cdTime[p]}
+function canUse(p){return Date.now()>(cooldown[p]||0)}
+
+function saveUpgrades(){
+  const data={magnet:magnetOwned,shield:shieldOwned,double:doubleOwned,speed:speedOwned,jump:jumpOwned}
+  localStorage.setItem("upgrades",JSON.stringify(data))
+  saveScore(best,wallet,data)
+}
+
+function getBiome(){
+if(score<20000)return "space"
+if(score<40000)return "ice"
+if(score<60000)return "volcano"
+if(score<80000)return "water"
+return "forest"
+}
+
+function resetGame(){
+player={x:200,y:500,vx:0,vy:0}
+platforms=[];coins=[];score=0
+platforms.push({x:0,y:580,w:400,h:20,type:"start"})
+for(let i=1;i<16;i++)createPlatform(580-i*45)
+}
+
+function createPlatform(y){
+let biome=getBiome()
+let specials={
+space:["lowG","boost","teleport"],
+ice:["ice"],
+volcano:["lava","lavaBoost"],
+water:["bubble"],
+forest:["leaf"]
+}
+
+let r=Math.random()
+let type="normal"
+
+if(r>0.55){
+  let pool=["deadly",...specials[biome]]
+  type=pool[Math.floor(Math.random()*pool.length)]
+}
+
+let p={x:Math.random()*330,y:y,w:70,h:10,type:type}
+platforms.push(p)
+if(Math.random()<0.25)coins.push({x:p.x+35,y:p.y-10})
+}
+
+// 🎹 STEROWANIE
+addEventListener("keydown",e=>{
+
+const now=Date.now()
+
+// DASH
+if(e.key==="a"){
+ if(now-lastA<250 && now>dashCooldown){
+  player.vx=-22
+  dashCooldown=now+5000
+ }
+ lastA=now
+}
+
+if(e.key==="d"){
+ if(now-lastD<250 && now>dashCooldown){
+  player.vx=22
+  dashCooldown=now+5000
+ }
+ lastD=now
+}
+
+// DOUBLE JUMP
+if(e.key==="w"){
+ if(now-lastW<250 && player.vy<0 && now>doubleCooldown){
+  player.vy=-18
+  doubleCooldown=now+10000
+ }
+ lastW=now
+}
+
+// NIEBIESKA TARCZA
+if(e.key.toLowerCase()==="s"){
+  if(window._lastS && now-window._lastS<300){
+    blueShield=true
+  }
+  window._lastS=now
+}
+
+keys[e.key.toLowerCase()]=true
+
+// MOCE
+if(e.key==="z" && magnetOwned && canUse("magnet")){
+ magnetActive=true
+ setTimeout(()=>magnetActive=false,10000)
+ setCD("magnet")
+}
+
+if(e.key==="x" && speedOwned && canUse("speed")){
+ speedActive=true
+ setTimeout(()=>speedActive=false,10000)
+ setCD("speed")
+}
+
+if(e.key==="c" && jumpOwned && canUse("super")){
+ player.vy=-50
+ score+=600
+ setCD("super")
+}
+
+})
+
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false)
+
+function platformEffect(p){
+
+if(p.type==="deadly"||p.type==="lava"){
+  if(blueShield){ blueShield=false }
+  else if(shieldActive){ shieldActive=false }
+  else { resetGame(); return }
+}
+
+if(p.type==="boost") player.vy=-26
+if(p.type==="leaf") player.vy=-24
+if(p.type==="lavaBoost") player.vy=-28
+if(p.type==="teleport") player.y-=140
+if(p.type==="bubble") player.vy*=0.5
+if(p.type==="ice") player.vx*=1.8
+
+if(p.type==="lowG") lowGNextJump=true
+}
+
+function update(){
+
+if(player.y>canvas.height+40){
+ resetGame()
+ return
+}
+
+let prevY=player.y
+
+let turnSpeed=speedActive?12:speed
+player.vx=0
+if(keys["a"])player.vx=-turnSpeed
+if(keys["d"])player.vx=turnSpeed
+
+player.vy+=gravity
+player.x+=player.vx
+player.y+=player.vy
+
+if(player.x>400)player.x=-20
+if(player.x<-20)player.x=400
+
+// 🔥 NAPRAWIONA KOLIZJA
+platforms.forEach(p=>{
+
+let prevBottom=prevY+20
+let newBottom=player.y+20
+
+let landed=
+prevBottom<=p.y &&
+newBottom>=p.y &&
+player.x+20>p.x &&
+player.x<p.x+p.w &&
+player.vy>0
+
+if(landed){
+ player.y=p.y-20
+ player.vy= lowGNextJump ? -12 : jump
+ lowGNextJump=false
+ canDouble=true
+ platformEffect(p)
+}
+
+})
+
+coins.forEach((c,i)=>{
+let dx=(player.x+10)-c.x
+let dy=(player.y+10)-c.y
+let dist=Math.hypot(dx,dy)
+
+if(magnetActive && dist<150){
+ c.x+=dx*0.08
+ c.y+=dy*0.08
+}
+
+if(dist<15){
+ wallet++
+ localStorage.setItem("coins",wallet)
+ coinsDisplay.innerText=wallet
+ coins.splice(i,1)
+}
+})
+
+if(player.y<300){
+let diff=300-player.y
+player.y=300
+platforms.forEach(p=>p.y+=diff)
+coins.forEach(c=>c.y+=diff)
+score+=Math.floor(diff)
+}
+
+if(score>best){
+best=score
+localStorage.setItem("best",best)
+bestEl.innerText=best
+saveScore(best,wallet,upgrades)
+}
+
+while(platforms.length<40){
+let highest=Math.min(...platforms.map(p=>p.y))
+createPlatform(highest-45)
+}
+
+platforms=platforms.filter(p=>p.y<650)
+
+}
+
+function draw(){
+
+ctx.fillStyle="#000"
+ctx.fillRect(0,0,400,600)
+
+platforms.forEach(p=>{
+let colors={
+normal:"white",
+deadly:"red",
+boost:"#00ffff",
+teleport:"#ff00ff",
+lowG:"#aaaaff",
+ice:"#7fe8ff",
+lava:"#ff2200",
+lavaBoost:"#ff5500",
+bubble:"#66ccff",
+leaf:"#44ff44"
+}
+ctx.fillStyle=colors[p.type]||"white"
+ctx.fillRect(p.x,p.y,p.w,p.h)
+})
+
+coins.forEach(c=>{
+ctx.fillStyle="gold"
+ctx.beginPath()
+ctx.arc(c.x,c.y,6,0,Math.PI*2)
+ctx.fill()
+})
+
+ctx.fillStyle = blueShield ? "deepskyblue" : (shieldActive?"cyan":"red")
+ctx.beginPath()
+ctx.arc(player.x+10,player.y+10,10,0,Math.PI*2)
+ctx.fill()
+
+ctx.fillStyle="white"
+ctx.fillText("Height: "+score,10,20)
+
+}
+
+function loop(){
+update()
+draw()
+updateCooldownBars()
+requestAnimationFrame(loop)
+}
+
+function updateCooldownBars(){
+  for(const k in cdTime){
+    const left=Math.max(0,(cooldown[k]||0)-Date.now())
+    const pct = left<=0 ? 100 : 100-(left/cdTime[k]*100)
+    const el=document.getElementById("cd"+k.charAt(0).toUpperCase()+k.slice(1))
+    if(!el) continue
+    el.style.width=pct+"%"
+  }
+}
+
+const bestEl=document.getElementById("best")
+const coinsDisplay=document.getElementById("coinsDisplay")
+
+legendBtn.onclick=()=>legend.style.display=legend.style.display?"":"block"
+topBtn.onclick=async()=>{top.style.display=top.style.display?"":"block";await loadTop10()}
+
+resetGame()
+loop()
+
+//* 📱💻 BUTTONS = KEYBOARD (works on phone + PC) */
+
+function pressKey(key){
+window.dispatchEvent(new KeyboardEvent("keydown",{key:key}));
+}
+
+function releaseKey(key){
+window.dispatchEvent(new KeyboardEvent("keyup",{key:key}));
+}
+
+function bindButton(id,key){
+const btn=document.getElementById(id);
+if(!btn) return;
+
+/* mouse (PC) */
+btn.addEventListener("mousedown",()=>pressKey(key));
+btn.addEventListener("mouseup",()=>releaseKey(key));
+btn.addEventListener("mouseleave",()=>releaseKey(key));
+
+/* touch (phone) */
+btn.addEventListener("touchstart",e=>{
+e.preventDefault();
+pressKey(key);
+},{passive:false});
+
+btn.addEventListener("touchend",e=>{
+e.preventDefault();
+releaseKey(key);
+},{passive:false});
+
+btn.addEventListener("touchcancel",()=>releaseKey(key));
+}
+
+/* movement */
+bindButton("left","a");
+bindButton("right","d");
+bindButton("jump","w");
+bindButton("down","s");
+
+/* powers */
+bindButton("magnet","z");
+bindButton("speed","x");
+bindButton("super","c");
+
+</script>
+
+</body>
+</html>
