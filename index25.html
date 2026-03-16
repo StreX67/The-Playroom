@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
@@ -112,7 +111,7 @@ border-radius:50%
 <h2>GO UP</h2>
 <div>Best: <span id="best">0</span></div>
 <div>Coins: <span id="coinsDisplay">0</span></div>
-<button onclick="location.href='index.html'">⬅ Powrót do menu</button>
+
 <canvas id="game" width="400" height="600"></canvas>
 
 <button id="shopBtn">SHOP</button>
@@ -238,35 +237,41 @@ let cooldownUpgrades = JSON.parse(localStorage.getItem("cooldownUpgrades")) || {
 };
 
 // =====================
-// POWERS
+// POWERS - zmniejszone cooldowny dla double, dash, shield o połowę
 // =====================
 const powers = {
-    double: {cooldown:10000,last:0},
-    dash: {cooldown:5000,last:0},
-    shield: {cooldown:15000,duration:6000,last:0,active:false},
-    magnet: {cooldown:30000,duration:15000,last:0,active:false},
-    speed: {cooldown:20000,duration:10000,last:0,active:false},
-    super: {cooldown:15000,last:0}
+    double: {cooldown:5000,last:0},      // 10000 -> 5000 ms
+    dash: {cooldown:2500,last:0},        // 5000 -> 2500 ms
+    shield: {cooldown:7500,duration:3000,last:0,active:false},  // 15000 -> 7500 ms, duration 6000 -> 3000 ms
+    magnet: {cooldown:20000,duration:15000,last:0,active:false},
+    speed: {cooldown:17500,duration:10000,last:0,active:false},
+    super: {cooldown:10000,last:0}
 };
 
 Object.keys(cooldownUpgrades).forEach(p => {
-    if(cooldownUpgrades[p]) powers[p].cooldown -= cooldownReduction;
+    if(cooldownUpgrades[p]) powers[p].cooldown = Math.max(0, powers[p].cooldown - cooldownReduction);
 });
 
+// =====================
+// CAN USE POWER?
+// =====================
 function canUse(p) {
     return Date.now() - powers[p].last > powers[p].cooldown;
 }
 
+// =====================
+// ACTIVATE POWER
+// =====================
 function activate(p) {
     powers[p].last = Date.now();
     powers[p].active = true;
     if(powers[p].duration) {
-        setTimeout(()=>powers[p].active=false,powers[p].duration);
+        setTimeout(() => powers[p].active = false, powers[p].duration);
     }
 }
 
 // =====================
-// COOLDOWN SHOP
+// COOLDOWN SHOP RENDER
 // =====================
 function renderCooldownShop() {
     shopCooldowns.innerHTML = "";
@@ -279,17 +284,19 @@ function renderCooldownShop() {
         shopCooldowns.appendChild(div);
     });
 }
-window.buyCooldown = function(p,price){
+
+window.buyCooldown = function(p, price){
     if(cooldownUpgrades[p]) return;
     if(wallet < price) return;
     wallet -= price;
     coinsDisplay.innerText = wallet;
     localStorage.setItem("coins", wallet);
-    powers[p].cooldown -= cooldownReduction;
+    powers[p].cooldown = Math.max(0, powers[p].cooldown - cooldownReduction);
     cooldownUpgrades[p] = true;
     localStorage.setItem("cooldownUpgrades", JSON.stringify(cooldownUpgrades));
     renderCooldownShop();
 }
+
 renderCooldownShop();
 
 // =====================
@@ -317,6 +324,7 @@ function renderPlayerShop() {
         shopUpgrades.appendChild(div);
     });
 }
+
 window.buyUpgrade = function(type, price) {
     if(wallet < price) return;
     wallet -= price;
@@ -381,7 +389,7 @@ function resetGame(){
 }
 
 // =====================
-// PLATFORM GENERATION
+// PLATFORM GENERATION - zmniejszona liczba platform max o 60% (z 40 na 16)
 // =====================
 function createPlatform(y){
     let biome = getBiome();
@@ -536,12 +544,15 @@ function update(){
         document.getElementById("best").innerText = best;
     }
 
-    // generowanie platform
-    while(platforms.length < 40){
+    // generowanie platform - max 16 (40 * 0.4)
+    while(platforms.length < 16){
         let highest = Math.min(...platforms.map(p => p.y));
         createPlatform(highest - (phys.platformSpacing || 45));
     }
     platforms = platforms.filter(p => p.y < 650);
+
+    // Aktualizacja pasków cooldownu
+    updateCooldownBars();
 }
 
 // =====================
@@ -612,6 +623,24 @@ function draw(){
 }
 
 // =====================
+// PASKI COOLDOWNÓW
+// =====================
+function updateCooldownBars(){
+    function setBar(id, power){
+        const el = document.getElementById(id);
+        if(!el) return;
+        let elapsed = Date.now() - powers[power].last;
+        let pct = Math.min(100, (elapsed / powers[power].cooldown) * 100);
+        el.style.width = pct + "%";
+    }
+    setBar("cdDouble", "double");
+    setBar("cdShield", "shield");
+    setBar("cdMagnet", "magnet");
+    setBar("cdSpeed", "speed");
+    setBar("cdSuper", "super");
+}
+
+// =====================
 // GAME LOOP
 // =====================
 function gameLoop(){
@@ -619,6 +648,18 @@ function gameLoop(){
     draw();
     requestAnimationFrame(gameLoop);
 }
+
+// =====================
+// SHOP TOGGLE
+// =====================
+const shopBtn = document.getElementById("shopBtn");
+shopBtn.addEventListener("click", () => {
+    if(shopPanel.style.display === "none" || shopPanel.style.display === ""){
+        shopPanel.style.display = "block";
+    } else {
+        shopPanel.style.display = "none";
+    }
+});
 
 // =====================
 // START
