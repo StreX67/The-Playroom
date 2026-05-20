@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>Gra w trafianie kropek</title>
+<style>
+    body {
+        font-family: Arial;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background: #222;
+        color: white;
+        margin: 0;
+    }
+
+    #container {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+    }
+
+    #game {
+        width: 500px;
+        height: 400px;
+        background: black;
+        position: relative;
+        border: 2px solid white;
+        cursor: crosshair;
+    }
+
+    .dot {
+        width: 50px;
+        height: 50px;
+        background: red;
+        border-radius: 50%;
+        position: absolute;
+        cursor: pointer;
+    }
+
+    #panel {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    button {
+        padding: 10px;
+        font-size: 16px;
+        cursor: pointer;
+    }
+</style>
+</head>
+<body>
+
+<div id="container">
+    <div id="game"></div>
+
+    <div id="panel">
+        <h2>Punkty: <span id="score">0</span></h2>
+
+        <select id="timeSelect">
+            <option value="30">30 sekund</option>
+            <option value="60">1 minuta</option>
+            <option value="180">3 minuty</option>
+            <option value="300">5 minut</option>
+        </select>
+
+        <button onclick="startGame()">Start gry</button>
+
+        <h3>Najlepsze wyniki:</h3>
+        <ul id="highscores"></ul>
+    </div>
+</div>
+
+<script>
+let score = 0;
+let gameTime = 30;
+let gameInterval;
+let spawnInterval;
+let activeDot = null;
+
+const game = document.getElementById("game");
+const scoreEl = document.getElementById("score");
+
+function updateScore() {
+    scoreEl.textContent = score;
+}
+
+function updateHighscores() {
+    const list = document.getElementById("highscores");
+    list.innerHTML = "";
+
+    const scores = JSON.parse(localStorage.getItem("scores")) || {};
+
+    for (let key in scores) {
+        const li = document.createElement("li");
+        li.textContent = key + "s - " + scores[key] + " pkt";
+        list.appendChild(li);
+    }
+}
+
+function saveScore(time, score) {
+    let scores = JSON.parse(localStorage.getItem("scores")) || {};
+    if (!scores[time] || score > scores[time]) {
+        scores[time] = score;
+    }
+    localStorage.setItem("scores", JSON.stringify(scores));
+}
+
+function spawnDot() {
+    if (activeDot) {
+        activeDot.remove();
+        activeDot = null;
+    }
+
+    const dot = document.createElement("div");
+    dot.classList.add("dot");
+
+    let clicked = false; // ⬅️ KLUCZOWE
+
+    const size = 50;
+    const x = Math.random() * (game.clientWidth - size);
+    const y = Math.random() * (game.clientHeight - size);
+
+    dot.style.left = x + "px";
+    dot.style.top = y + "px";
+
+    dot.addEventListener("click", (e) => {
+        e.stopPropagation();
+
+        if (clicked) return; // ⬅️ zabezpieczenie
+        clicked = true;
+
+        score += 2;
+        updateScore();
+
+        dot.remove();
+        activeDot = null;
+    });
+
+    game.appendChild(dot);
+    activeDot = dot;
+
+    setTimeout(() => {
+        if (!clicked && dot === activeDot) {
+            dot.remove();
+            activeDot = null;
+        }
+    }, 2000);
+}
+
+game.addEventListener("click", () => {
+    score = Math.max(0, score - 1);
+    updateScore();
+});
+
+function startGame() {
+    clearInterval(gameInterval);
+    clearInterval(spawnInterval);
+
+    score = 0;
+    updateScore();
+
+    gameTime = parseInt(document.getElementById("timeSelect").value);
+
+    let timeLeft = gameTime;
+
+    spawnInterval = setInterval(spawnDot, 600);
+
+    gameInterval = setInterval(() => {
+        timeLeft--;
+
+        if (timeLeft <= 0) {
+            clearInterval(gameInterval);
+            clearInterval(spawnInterval);
+
+            if (activeDot) {
+                activeDot.remove();
+                activeDot = null;
+            }
+
+            saveScore(gameTime, score);
+            updateHighscores();
+
+            alert("Koniec gry! Twój wynik: " + score);
+        }
+    }, 1000);
+}
+
+updateHighscores();
+</script>
+
+
+<script>
+if(localStorage.getItem("casinoLogged")==="1"){
+    sessionStorage.setItem("casinoLogged","1");localStorage.setItem("casinoLogged","1");
+}
+</script>
+
+</body>
+</html>

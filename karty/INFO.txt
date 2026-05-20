@@ -1,0 +1,2 @@
+Blackjack używa teraz kart pobieranych online z deckofcardsapi.com
+Nie trzeba trzymać grafik lokalnie.
