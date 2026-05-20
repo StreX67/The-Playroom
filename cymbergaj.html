@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>Cymbergaj</title>
+
+<style>
+body{
+background:#0b1d2a;
+color:white;
+text-align:center;
+font-family:Arial;
+margin:0;
+overflow:hidden;
+}
+
+canvas{
+background:#063248;
+margin-top:10px;
+border:3px solid #00eaff;
+}
+
+select,button{
+margin:5px;
+padding:6px;
+}
+
+#msg{
+font-size:28px;
+margin-top:10px;
+display:none;
+}
+
+.controls{
+position:fixed;
+bottom:20px;
+display:flex;
+flex-direction:column;
+align-items:center;
+}
+
+.controls.left{ left:20px; }
+.controls.right{ right:20px; }
+
+.controls .row{ display:flex; }
+
+.controls button{
+width:60px;
+height:60px;
+margin:4px;
+font-size:20px;
+border:none;
+border-radius:10px;
+background:#00eaff55;
+color:white;
+touch-action:none;
+user-select:none;
+}
+
+.controls button:active{
+background:#00eaff;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Cymbergaj</h2>
+<button class="back" onclick="location.href='index.html'">⬅ Powrót do menu</button>
+
+Tryb:
+<select id="mode" onchange="updateControls()">
+<option value="bot">1 vs Bot</option>
+<option value="pvp">1 vs 1</option>
+</select>
+
+Poziom bota:
+<select id="bot">
+<option value="1">Łatwy</option>
+<option value="2">Średni</option>
+<option value="3">Trudny</option>
+</select>
+
+Czas:
+<select id="time">
+<option value="60">1 min</option>
+<option value="180">3 min</option>
+<option value="300">5 min</option>
+</select>
+
+<button id="startBtn" onclick="start()">START</button>
+
+<button onclick="findOnline()">🌐 SZUKAJ GRACZA ONLINE</button>
+
+<div>Gracz 1: <span id="s1">0</span> | Gracz 2: <span id="s2">0</span></div>
+<div>Czas: <span id="t">0</span></div>
+<div id="msg"></div>
+
+<canvas id="c" width="900" height="500"></canvas>
+
+<div class="controls left" id="controlsP1">
+<div class="row"><button data-key="ArrowUp">▲</button></div>
+<div class="row">
+<button data-key="ArrowLeft">◀</button>
+<button data-key="ArrowDown">▼</button>
+<button data-key="ArrowRight">▶</button>
+</div>
+</div>
+
+<div class="controls right" id="controlsP2">
+<div class="row"><button data-key="w">▲</button></div>
+<div class="row">
+<button data-key="a">◀</button>
+<button data-key="s">▼</button>
+<button data-key="d">▶</button>
+</div>
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+import { getDatabase } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+
+const firebaseConfig = {
+apiKey: "AIzaSyCoelr0ztFBXhZKR2N0EGfa2xjSLlaDIY4",
+authDomain: "cymbergaj-online-c8e92.firebaseapp.com",
+databaseURL: "https://cymbergaj-online-c8e92-default-rtdb.europe-west1.firebasedatabase.app",
+projectId: "cymbergaj-online-c8e92",
+storageBucket: "cymbergaj-online-c8e92.firebasestorage.app",
+messagingSenderId: "992835282246",
+appId: "1:992835282246:web:86f073c238956694a7f147"
+};
+
+initializeApp(firebaseConfig);
+getDatabase();
+
+let SPEED_MULT = 1.75;
+let PUCK_MULT = 1.75;
+let DASH_HIT_MULT = 1.8;
+
+let canvas=document.getElementById("c");
+let ctx=canvas.getContext("2d");
+
+let p1,p2,puck;
+
+let keys={};
+let lastPress={};
+
+let s1=0;
+let s2=0;
+
+let time=0;
+let run=false;
+
+let lastFrame=0;
+
+let dashCooldownP1=0;
+let dashCooldownP2=0;
+
+const goalTop=180;
+const goalBottom=320;
+
+const mode=document.getElementById("mode");
+const botSel=document.getElementById("bot");
+const timeSel=document.getElementById("time");
+
+const s1Span=document.getElementById("s1");
+const s2Span=document.getElementById("s2");
+const t=document.getElementById("t");
+const msg=document.getElementById("msg");
+
+function resetPositions(){
+
+p1={x:120,y:250,r:22,dash:0};
+
+p2={x:780,y:250,r:22,dash:0,vx:0,vy:0,targetX:780,targetY:250,decisionTimer:0};
+
+puck={x:450,y:250,vx:0,vy:0,r:12,friction:0.99};
+
+}
+
+function resetGame(){
+
+keys={};
+lastPress={};
+
+dashCooldownP1=0;
+dashCooldownP2=0;
+
+resetPositions();
+
+}
+
+function start(){
+
+run=false;
+
+resetGame();
+
+s1=0;
+s2=0;
+
+s1Span.innerText=0;
+s2Span.innerText=0;
+
+time=parseInt(timeSel.value);
+t.innerText=time;
+
+document.getElementById("startBtn").disabled=true;
+mode.disabled=true;
+botSel.disabled=true;
+timeSel.disabled=true;
+
+let count=3;
+
+msg.style.display="block";
+msg.innerText=count;
+
+let countdown=setInterval(()=>{
+
+count--;
+
+if(count>0){
+msg.innerText=count;
+}
+else if(count===0){
+msg.innerText="START!";
+}
+else{
+
+clearInterval(countdown);
+
+msg.style.display="none";
+
+run=true;
+lastFrame=0;
+
+requestAnimationFrame(loop);
+
+}
+
+},1000);
+
+updateControls();
+
+}
+
+function dash(key){
+
+if(key.includes("Arrow") && dashCooldownP1<=0){
+p1.dash=12;
+dashCooldownP1=25;
+}
+
+if("wasd".includes(key) && mode.value==="pvp" && dashCooldownP2<=0){
+p2.dash=12;
+dashCooldownP2=25;
+}
+
+}
+
+function handleDash(key){
+
+let now=Date.now();
+
+if(lastPress[key] && now-lastPress[key]<220){
+dash(key);
+}
+
+lastPress[key]=now;
+
+}
+
+document.addEventListener("keydown",e=>{
+
+if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)){
+e.preventDefault();
+}
+
+if(!run)return;
+
+if(!keys[e.key]) handleDash(e.key);
+
+keys[e.key]=true;
+
+});
+
+document.addEventListener("keyup",e=>{
+
+keys[e.key]=false;
+
+});
+
+window.addEventListener("blur",()=>{
+
+keys={};
+
+});
+
+function stableBot(){
+
+let lvl=parseInt(botSel.value);
+
+let reaction=0.03*SPEED_MULT;
+let attackChance=0.4;
+
+if(lvl===2){
+reaction=0.045*SPEED_MULT;
+attackChance=0.5;
+}
+
+if(lvl===3){
+reaction=0.06*SPEED_MULT;
+attackChance=0.7;
+}
+
+let danger=(puck.vx>0 && puck.x>520);
+
+p2.decisionTimer--;
+
+if(p2.decisionTimer<=0){
+
+if(danger){
+
+p2.targetX=760;
+p2.targetY=puck.y;
+
+}else{
+
+if(Math.random()<attackChance){
+
+p2.targetX=puck.x-20;
+p2.targetY=puck.y;
+
+}else{
+
+p2.targetX=760;
+p2.targetY=250;
+
+}
+
+}
+
+p2.decisionTimer=15;
+
+}
+
+let dx=p2.targetX-p2.x;
+let dy=p2.targetY-p2.y;
+
+p2.vx=p2.vx*0.7+dx*reaction;
+p2.vy=p2.vy*0.7+dy*reaction;
+
+let len=Math.hypot(p2.vx,p2.vy);
+
+let maxSpeed=5.8*SPEED_MULT;
+
+if(len>maxSpeed){
+
+p2.vx=p2.vx/len*maxSpeed;
+p2.vy=p2.vy/len*maxSpeed;
+
+}
+
+p2.x+=p2.vx;
+p2.y+=p2.vy;
+
+}
+
+function move(){
+
+let baseSpeed=5.8*SPEED_MULT;
+
+if(p1.dash>0)p1.dash--;
+if(p2.dash>0)p2.dash--;
+
+let speed1=baseSpeed+(p1.dash?10:0);
+let speed2=baseSpeed+(p2.dash?10:0);
+
+if(keys.ArrowUp)p1.y-=speed1;
+if(keys.ArrowDown)p1.y+=speed1;
+if(keys.ArrowLeft)p1.x-=speed1;
+if(keys.ArrowRight)p1.x+=speed1;
+
+if(mode.value==="pvp"){
+
+if(keys.w)p2.y-=speed2;
+if(keys.s)p2.y+=speed2;
+if(keys.a)p2.x-=speed2;
+if(keys.d)p2.x+=speed2;
+
+}else{
+
+stableBot();
+
+}
+
+bounds();
+collisions();
+
+}
+
+function bounds(){
+
+p1.x=Math.max(22,Math.min(440,p1.x));
+p2.x=Math.max(470,Math.min(878,p2.x));
+
+p1.y=Math.max(22,Math.min(478,p1.y));
+p2.y=Math.max(22,Math.min(478,p2.y));
+
+}
+
+function collisions(){
+
+let baseHit=7*PUCK_MULT;
+let dashMulti=2*DASH_HIT_MULT;
+
+let dx=puck.x-p1.x;
+let dy=puck.y-p1.y;
+let d=Math.hypot(dx,dy);
+
+if(d<p1.r+puck.r){
+
+let angle=Math.atan2(dy,dx);
+
+let mult=p1.dash?dashMulti:1;
+
+puck.vx=Math.cos(angle)*baseHit*mult;
+puck.vy=Math.sin(angle)*baseHit*mult;
+
+}
+
+dx=puck.x-p2.x;
+dy=puck.y-p2.y;
+d=Math.hypot(dx,dy);
+
+if(d<p2.r+puck.r){
+
+let angle=Math.atan2(dy,dx);
+
+let mult=p2.dash?dashMulti:1;
+
+puck.vx=Math.cos(angle)*baseHit*mult;
+puck.vy=Math.sin(angle)*baseHit*mult;
+
+}
+
+puck.x+=puck.vx;
+puck.y+=puck.vy;
+
+puck.vx*=puck.friction;
+puck.vy*=puck.friction;
+
+if(puck.y-puck.r<0){
+puck.y=puck.r;
+puck.vy*=-1;
+}
+
+if(puck.y+puck.r>500){
+puck.y=500-puck.r;
+puck.vy*=-1;
+}
+
+if(puck.x-puck.r<0){
+
+if(puck.y>goalTop && puck.y<goalBottom){
+
+s2++;
+s2Span.innerText=s2;
+resetPositions();
+
+}else{
+
+puck.x=puck.r;
+puck.vx*=-1;
+
+}
+
+}
+
+if(puck.x+puck.r>900){
+
+if(puck.y>goalTop && puck.y<goalBottom){
+
+s1++;
+s1Span.innerText=s1;
+resetPositions();
+
+}else{
+
+puck.x=900-puck.r;
+puck.vx*=-1;
+
+}
+
+}
+
+}
+
+function draw(){
+
+ctx.clearRect(0,0,900,500);
+
+ctx.beginPath();
+ctx.moveTo(450,0);
+ctx.lineTo(450,500);
+ctx.strokeStyle="#00eaff";
+ctx.lineWidth=3;
+ctx.stroke();
+
+ctx.fillStyle="#fff";
+ctx.fillRect(0,goalTop,10,goalBottom-goalTop);
+ctx.fillRect(890,goalTop,10,goalBottom-goalTop);
+
+circle(p1,"#0f8");
+circle(p2,"#f06");
+circle(puck,"#fff");
+
+}
+
+function circle(o,c){
+
+ctx.beginPath();
+ctx.arc(o.x,o.y,o.r,0,Math.PI*2);
+ctx.fillStyle=c;
+ctx.fill();
+
+}
+
+function loop(ts){
+
+if(!run)return;
+
+let dt=(ts-lastFrame)/1000;
+lastFrame=ts;
+
+time-=dt;
+
+if(time<=0){
+
+time=0;
+run=false;
+
+msg.style.display="block";
+msg.innerText=s1>s2?"WYGRYWA GRACZ 1":s2>s1?"WYGRYWA GRACZ 2":"REMIS";
+
+document.getElementById("startBtn").disabled=false;
+mode.disabled=false;
+botSel.disabled=false;
+timeSel.disabled=false;
+
+return;
+
+}
+
+move();
+draw();
+
+t.innerText=Math.ceil(time);
+
+if(dashCooldownP1>0)dashCooldownP1--;
+if(dashCooldownP2>0)dashCooldownP2--;
+
+requestAnimationFrame(loop);
+
+}
+
+function updateControls(){
+
+if(mode.value==="bot"){
+document.getElementById("controlsP2").style.display="none";
+}else{
+document.getElementById("controlsP2").style.display="flex";
+}
+
+}
+
+window.start=start;
+window.updateControls=updateControls;
+
+</script>
+
+<script>
+if(localStorage.getItem("casinoLogged")==="1"){
+    sessionStorage.setItem("casinoLogged","1");localStorage.setItem("casinoLogged","1");
+}
+</script>
+
+</body>
+</html>

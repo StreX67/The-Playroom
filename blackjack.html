@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blackjack PRO</title>
+<meta name="description" content="Blackjack PRO – gra kasyno online">
+<meta name="theme-color" content="#000000">
+</head>
+
+<body style="background:#000;color:white;text-align:center;font-family:Arial;">
+
+<h1>🎴 Blackjack PRO</h1>
+<h2 id="saldo"></h2>
+
+<button class="back" onclick="location.href='index.html'">⬅ Powrót do menu</button>
+</a>
+
+<br><br>
+
+<input type="number" id="bet" placeholder="Kwota zakładu" min="1">
+<br><br>
+
+<div id="bjButtons">
+  <button id="dealBtn" onclick="startGame()">🃏 Nowa Runda</button>
+  <button id="hitBtn" onclick="hit()" disabled>Hit</button>
+  <button id="standBtn" onclick="stand()" disabled>Stand</button>
+</div>
+
+<h2 id="info"></h2>
+
+<h3>Krupier <span id="dealerScore"></span></h3>
+<div id="dealerCards" class="cards-row"></div>
+
+<h3>Ty <span id="playerScore"></span></h3>
+<div id="playerCards" class="cards-row"></div>
+
+<style>
+.cards-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 10px 0;
+}
+.cards-row img {
+  width: 90px;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+#bjButtons {
+  margin-top: 15px;
+}
+#bjButtons button {
+  padding: 10px 18px;
+  margin: 4px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+}
+#dealBtn { background: #4CAF50; color: white; }
+#hitBtn  { background: #2196F3; color: white; }
+#standBtn{ background: #FF9800; color: white; }
+#bjButtons button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+</style>
+
+<script>
+// ── Talia ──────────────────────────────────────────────
+const suits  = ["H","S","D","C"];
+const values = ["A","2","3","4","5","6","7","8","9","0","J","Q","K"];
+
+function randomCard() {
+  const suit  = suits [Math.floor(Math.random() * suits.length)];
+  const value = values[Math.floor(Math.random() * values.length)];
+  return { suit, value };
+}
+
+function cardImg(card, hidden) {
+  if (hidden) return "https://deckofcardsapi.com/static/img/back.png";
+  return `https://deckofcardsapi.com/static/img/${card.value}${card.suit}.png`;
+}
+
+function cardPoints(value) {
+  if (["J","Q","K"].includes(value)) return 10;
+  if (value === "0") return 10;  // "10" w API
+  if (value === "A") return 11;
+  return parseInt(value);
+}
+
+function handValue(cards) {
+  let total = 0, aces = 0;
+  for (const c of cards) {
+    total += cardPoints(c.value);
+    if (c.value === "A") aces++;
+  }
+  while (total > 21 && aces > 0) { total -= 10; aces--; }
+  return total;
+}
+
+// ── Stan gry ───────────────────────────────────────────
+let dealerCards = [];
+let playerCards = [];
+let gameActive   = false;
+let zaklad       = 0;
+
+// ── Saldo ──────────────────────────────────────────────
+if (localStorage.getItem("saldo") === null) localStorage.setItem("saldo", 1000);
+
+function getSaldo() { return parseInt(localStorage.getItem("saldo")); }
+function setSaldo(v) {
+  if (v < 0) v = 0;
+  localStorage.setItem("saldo", v);
+  updateSaldoUI();
+  if (typeof setSaldoFirebase === "function") setSaldoFirebase(v);
+  if (v === 0) checkZero(v);
+}
+function updateSaldoUI() {
+  document.getElementById("saldo").innerText = "💰 Saldo: " + getSaldo() + " zł";
+}
+updateSaldoUI();
+
+// ── Render ─────────────────────────────────────────────
+function renderCards(revealDealer) {
+  const dDiv = document.getElementById("dealerCards");
+  const pDiv = document.getElementById("playerCards");
+  dDiv.innerHTML = "";
+  pDiv.innerHTML = "";
+
+  dealerCards.forEach((card, i) => {
+    const img = document.createElement("img");
+    img.src = cardImg(card, i === 1 && !revealDealer);
+    dDiv.appendChild(img);
+  });
+  playerCards.forEach(card => {
+    const img = document.createElement("img");
+    img.src = cardImg(card, false);
+    pDiv.appendChild(img);
+  });
+
+  const pScore = handValue(playerCards);
+  document.getElementById("playerScore").innerText = "(" + pScore + ")";
+
+  if (revealDealer) {
+    document.getElementById("dealerScore").innerText = "(" + handValue(dealerCards) + ")";
+  } else {
+    const visiblePoints = cardPoints(dealerCards[0].value);
+    document.getElementById("dealerScore").innerText = "(" + visiblePoints + "+?)";
+  }
+}
+
+function setButtons(active) {
+  document.getElementById("hitBtn"  ).disabled = !active;
+  document.getElementById("standBtn").disabled = !active;
+  document.getElementById("dealBtn" ).disabled =  active;
+}
+
+function showInfo(msg) {
+  document.getElementById("info").innerText = msg;
+}
+
+// ── Nowa runda ─────────────────────────────────────────
+function startGame() {
+  const input = parseInt(document.getElementById("bet").value);
+  const saldo = getSaldo();
+
+  if (isNaN(input) || input <= 0) {
+    showInfo("⚠️ Wpisz kwotę zakładu!");
+    return;
+  }
+  if (input > saldo) {
+    showInfo("⚠️ Za mały stan konta!");
+    return;
+  }
+
+  zaklad = input;
+  dealerCards = [randomCard(), randomCard()];
+  playerCards = [randomCard(), randomCard()];
+  gameActive  = true;
+
+  renderCards(false);
+  showInfo("Zakład: " + zaklad + " zł");
+  setButtons(true);
+
+  // Sprawdź natychmiastowy blackjack gracza
+  if (handValue(playerCards) === 21) {
+    endGame(true);  // od razu stand jeśli blackjack
+  }
+}
+
+// ── Hit ────────────────────────────────────────────────
+function hit() {
+  if (!gameActive) return;
+  playerCards.push(randomCard());
+  renderCards(false);
+
+  const pVal = handValue(playerCards);
+  if (pVal > 21) {
+    showInfo("💥 Przekroczyłeś 21! Przegrana.");
+    setSaldo(getSaldo() - zaklad);
+    gameActive = false;
+    renderCards(true);
+    setButtons(false);
+  } else if (pVal === 21) {
+    endGame(false);
+  }
+}
+
+// ── Stand ──────────────────────────────────────────────
+function stand() {
+  if (!gameActive) return;
+  endGame(false);
+}
+
+// ── Rozliczenie ────────────────────────────────────────
+function endGame(instantBlackjack) {
+  gameActive = false;
+  setButtons(false);
+
+  // Krupier dobiera do >= 17
+  while (handValue(dealerCards) < 17) {
+    dealerCards.push(randomCard());
+  }
+
+  renderCards(true);
+
+  const pVal = handValue(playerCards);
+  const dVal = handValue(dealerCards);
+  let saldo  = getSaldo();
+
+  if (instantBlackjack && pVal === 21 && playerCards.length === 2) {
+    // Blackjack przy rozdaniu – wypłata 3:2
+    saldo += Math.floor(zaklad * 1.5);
+    showInfo("🔥 Blackjack! +"+Math.floor(zaklad*1.5)+" zł");
+  } else if (pVal > 21) {
+    // Bust – już odjęto w hit()
+    return;
+  } else if (dVal > 21) {
+    saldo += zaklad;
+    showInfo("✅ Krupier przekroczył 21! Wygrałeś +"+zaklad+" zł");
+  } else if (pVal > dVal) {
+    saldo += zaklad;
+    showInfo("✅ Wygrałeś! "+pVal+" > "+dVal+" (+"+zaklad+" zł)");
+  } else if (pVal === dVal) {
+    showInfo("🤝 Remis! Zwrot zakładu.");
+    // saldo bez zmiany
+  } else {
+    saldo -= zaklad;
+    showInfo("❌ Przegrana! "+pVal+" < "+dVal+" (-"+zaklad+" zł)");
+  }
+
+  setSaldo(saldo);
+}
+</script>
+
+<!-- ================= FIREBASE ================= -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, get, set, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "APIKEY",
+  authDomain: "kasynopz.firebaseapp.com",
+  databaseURL: "https://kasynopz-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "kasynopz",
+  storageBucket: "kasynopz.firebasestorage.app",
+  messagingSenderId: "816405578915",
+  appId: "APPID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+const nick = localStorage.getItem("casinoNick");
+
+async function getSaldoFirebase() {
+  if (!nick) return;
+  const snap = await get(ref(db, "players/" + nick));
+  if (snap.exists()) {
+    localStorage.setItem("saldo", snap.val().money);
+    updateSaldoUI();
+    checkZero(snap.val().money);
+  }
+}
+
+window.setSaldoFirebase = async function(v) {
+  if (!nick) return;
+  await update(ref(db, "players/" + nick), { money: v });
+};
+
+window.checkZero = function(s) {
+  if (s == 0) {
+    let btn = document.createElement("button");
+    btn.innerText = "💰 Odbierz 1000 zł";
+    btn.style.fontSize = "20px";
+    btn.onclick = async () => {
+      await setSaldoFirebase(1000);
+      location.reload();
+    };
+    document.body.appendChild(btn);
+  }
+};
+
+getSaldoFirebase();
+</script>
+
+<script>
+if (localStorage.getItem("casinoLogged") === "1") {
+  sessionStorage.setItem("casinoLogged", "1");
+  localStorage.setItem("casinoLogged", "1");
+}
+if (localStorage.getItem("casinoNick")) {
+  sessionStorage.setItem("casinoLogged", "1");
+}
+</script>
+
+</body>
+</html>
